@@ -1,0 +1,18 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:alpine  # Daha küçük boyutlu alpine versiyonunu kullanıyoruz
+    command: redis-server --requirepass Ph4nt0m4+4
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data  # Redis verilerini kalıcı hale getirmek için volume
+    restart: always  # Servis çökerse otomatik yeniden başlat
+    healthcheck:  # Redis'in sağlık durumunu kontrol et
+      test: ["CMD", "redis-cli", "6380"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis_data:  # Volume tanımlaması
