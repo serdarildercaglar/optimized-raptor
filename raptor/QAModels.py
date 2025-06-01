@@ -18,13 +18,13 @@ class BaseQAModel(ABC):
         pass
 
 
-class GPT3QAModel(BaseQAModel):
-    def __init__(self, model="text-davinci-003"):
+class GPT41QAModel(BaseQAModel):
+    def __init__(self, model="gpt-4.1"):
         """
-        Initializes the GPT-3 model with the specified model version.
+        Initializes the GPT-4.1 model with the specified model version.
 
         Args:
-            model (str, optional): The GPT-3 model version to use for generating summaries. Defaults to "text-davinci-003".
+            model (str, optional): The GPT-4.1 model version to use for generating summaries. Defaults to "gpt-4.1".
         """
         self.model = model
         self.client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -60,13 +60,13 @@ class GPT3QAModel(BaseQAModel):
             return ""
 
 
-class GPT3TurboQAModel(BaseQAModel):
+class GPT4oMiniQAModel(BaseQAModel):
     def __init__(self, model="gpt-4o-mini"):
         """
         Initializes the GPT-3 model with the specified model version.
 
         Args:
-            model (str, optional): The GPT-3 model version to use for generating summaries. Defaults to "text-davinci-003".
+            model (str, optional): The GPT-3 model version to use for generating summaries. Defaults to "gpt-4o-mini".
         """
         self.model = model
         self.client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])

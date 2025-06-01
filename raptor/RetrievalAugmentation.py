@@ -9,7 +9,7 @@ import json
 
 from .cluster_tree_builder import ClusterTreeBuilder, ClusterTreeConfig
 from .EmbeddingModels import BaseEmbeddingModel, AsyncOpenAIEmbeddingModel
-from .QAModels import BaseQAModel, GPT3TurboQAModel
+from .QAModels import BaseQAModel, GPT41QAModel
 from .SummarizationModels import BaseSummarizationModel
 from .tree_builder import TreeBuilder, TreeBuilderConfig, BuildProgress
 from .tree_retriever import TreeRetriever, TreeRetrieverConfig
@@ -287,7 +287,7 @@ class RetrievalAugmentationConfig:
         # Assign the created configurations to the instance
         self.tree_builder_config = tree_builder_config
         self.tree_retriever_config = tree_retriever_config
-        self.qa_model = qa_model or GPT3TurboQAModel()
+        self.qa_model = qa_model or GPT41QAModel()
         self.tree_builder_type = tree_builder_type
 
     def log_config(self):

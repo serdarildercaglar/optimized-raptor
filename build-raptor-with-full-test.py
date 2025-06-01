@@ -9,19 +9,19 @@ load_dotenv()
 print("🚀 Starting FULL RAPTOR build with optimized configuration...")
 
 # Read full data
-with open('data.txt', 'r') as file:
+with open('data/data.txt', 'r') as file:
     text = file.read()
 
 print(f"📄 Processing {len(text)} characters of full text...")
 
 from raptor import RetrievalAugmentation 
 from raptor import RetrievalAugmentationConfig
-from raptor import GPT4OSummarizationModel
+from raptor import GPT41SummarizationModel
 from raptor.EmbeddingModels import CustomEmbeddingModel
 
 # Initialize models
 embed_model = CustomEmbeddingModel()
-sum_model = GPT4OSummarizationModel()
+sum_model = GPT41SummarizationModel()
 
 # Optimized configuration for full data
 print("⚙️ Configuring optimized RAPTOR settings...")
