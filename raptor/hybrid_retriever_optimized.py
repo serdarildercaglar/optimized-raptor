@@ -12,8 +12,11 @@ from collections import defaultdict
 from .Retrievers import BaseRetriever
 from .tree_retriever import TreeRetriever
 from .sparse_retriever import AdvancedBM25Retriever, SparseRetrievalResult
-from .query_enhancement import QueryEnhancer, EnhancedQuery, query_embedding_cache
+from .query_enhancement_optimized import OptimizedQueryEnhancer, EnhancedQuery, optimized_query_cache
 from .tree_structures import Node
+# Backward compatibility aliases
+QueryEnhancer = OptimizedQueryEnhancer
+query_embedding_cache = optimized_query_cache
 from .EmbeddingModels import BaseEmbeddingModel, AsyncOpenAIEmbeddingModel
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)

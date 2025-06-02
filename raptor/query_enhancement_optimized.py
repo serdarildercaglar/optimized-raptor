@@ -21,6 +21,210 @@ from .tree_structures import Node
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
+class QueryNormalizer:
+    """Basic query normalizer for backward compatibility"""
+    
+    def normalize(self, query: str) -> str:
+        """Normalize query text"""
+        # Remove extra whitespace
+        normalized = ' '.join(query.split())
+        # Convert to lowercase  
+        normalized = normalized.lower()
+        # Remove special characters except basic punctuation
+        import re
+        normalized = re.sub(r'[^\w\s\?\!\.\,]', '', normalized)
+        return normalized.strip()
+
+
+class IntentDetector:
+    """Basic intent detector for backward compatibility"""
+    
+    def detect_intent(self, query: str) -> Tuple['QueryIntent', float]:
+        """Detect query intent with confidence score"""
+        query_lower = query.lower()
+        
+        # Simple keyword-based intent detection
+        if any(word in query_lower for word in ['what is', 'define', 'definition']):
+            return QueryIntent.DEFINITIONAL, 0.8
+        elif any(word in query_lower for word in ['how to', 'how do', 'steps', 'procedure']):
+            return QueryIntent.PROCEDURAL, 0.8
+        elif any(word in query_lower for word in ['compare', 'difference', 'vs', 'versus']):
+            return QueryIntent.COMPARATIVE, 0.8
+        elif any(word in query_lower for word in ['why', 'because', 'cause', 'reason']):
+            return QueryIntent.CAUSAL, 0.8
+        elif any(word in query_lower for word in ['when', 'time', 'date']):
+            return QueryIntent.TEMPORAL, 0.8
+        elif any(word in query_lower for word in ['how many', 'how much', 'count', 'number']):
+            return QueryIntent.QUANTITATIVE, 0.8
+        elif any(word in query_lower for word in ['summarize', 'summary', 'overview']):
+            return QueryIntent.SUMMARY, 0.8
+        else:
+            return QueryIntent.FACTUAL, 0.6
+    
+    def get_query_type(self, query: str) -> str:
+        """Get basic query type"""
+        if '?' in query:
+            return "question"
+        elif any(word in query.lower() for word in ['find', 'search', 'look for']):
+            return "search"
+        else:
+            return "statement"
+
+
+class EntityExtractor:
+    """Basic entity extractor for backward compatibility"""
+    
+    def extract_entities(self, query: str) -> List[str]:
+        """Extract basic entities from query"""
+        import re
+        
+        # Simple entity extraction - capitalized words, quoted phrases
+        entities = []
+        
+        # Find quoted phrases
+        quoted = re.findall(r'"([^"]*)"', query)
+        entities.extend(quoted)
+        
+        # Find capitalized words (potential proper nouns)
+        words = query.split()
+        for word in words:
+            # Remove punctuation for checking
+            clean_word = re.sub(r'[^\w]', '', word)
+            if len(clean_word) > 2 and clean_word[0].isupper() and clean_word[1:].islower():
+                entities.append(clean_word)
+        
+        # Remove duplicates and common words
+        stop_words = {'The', 'This', 'That', 'What', 'How', 'When', 'Where', 'Why'}
+        entities = [e for e in set(entities) if e not in stop_words]
+        
+        return entities[:5]  # Limit to 5 entities
+
+
+class QueryRewriter:
+    """Basic query rewriter for backward compatibility"""
+    
+    def rewrite_query(self, query: str, intent: 'QueryIntent') -> List[str]:
+        """Generate query rewrites based on intent"""
+        rewrites = []
+        
+        # Simple rewriting based on intent
+        if intent == QueryIntent.DEFINITIONAL:
+            rewrites.append(f"definition of {query}")
+            rewrites.append(f"what does {query} mean")
+        elif intent == QueryIntent.PROCEDURAL:
+            rewrites.append(f"steps for {query}")
+            rewrites.append(f"how to achieve {query}")
+        elif intent == QueryIntent.COMPARATIVE:
+            rewrites.append(f"comparison {query}")
+            rewrites.append(f"differences in {query}")
+        else:
+            # Generic rewrites
+            rewrites.append(f"information about {query}")
+            rewrites.append(f"details on {query}")
+        
+        return rewrites[:3]  # Limit to 3 rewrites
+
+class QueryNormalizer:
+    """Basic query normalizer for backward compatibility"""
+    
+    def normalize(self, query: str) -> str:
+        """Normalize query text"""
+        # Remove extra whitespace
+        normalized = ' '.join(query.split())
+        # Convert to lowercase  
+        normalized = normalized.lower()
+        # Remove special characters except basic punctuation
+        import re
+        normalized = re.sub(r'[^\w\s\?\!\.\,]', '', normalized)
+        return normalized.strip()
+
+class IntentDetector:
+    """Basic intent detector for backward compatibility"""
+    
+    def detect_intent(self, query: str) -> Tuple['QueryIntent', float]:
+        """Detect query intent with confidence score"""
+        # Import here to avoid circular import
+        query_lower = query.lower()
+        
+        # Simple keyword-based intent detection
+        if any(word in query_lower for word in ['what is', 'define', 'definition']):
+            return QueryIntent.DEFINITIONAL, 0.8
+        elif any(word in query_lower for word in ['how to', 'how do', 'steps', 'procedure']):
+            return QueryIntent.PROCEDURAL, 0.8
+        elif any(word in query_lower for word in ['compare', 'difference', 'vs', 'versus']):
+            return QueryIntent.COMPARATIVE, 0.8
+        elif any(word in query_lower for word in ['why', 'because', 'cause', 'reason']):
+            return QueryIntent.CAUSAL, 0.8
+        elif any(word in query_lower for word in ['when', 'time', 'date']):
+            return QueryIntent.TEMPORAL, 0.8
+        elif any(word in query_lower for word in ['how many', 'how much', 'count', 'number']):
+            return QueryIntent.QUANTITATIVE, 0.8
+        elif any(word in query_lower for word in ['summarize', 'summary', 'overview']):
+            return QueryIntent.SUMMARY, 0.8
+        else:
+            return QueryIntent.FACTUAL, 0.6
+    
+    def get_query_type(self, query: str) -> str:
+        """Get basic query type"""
+        if '?' in query:
+            return "question"
+        elif any(word in query.lower() for word in ['find', 'search', 'look for']):
+            return "search"
+        else:
+            return "statement"
+
+class EntityExtractor:
+    """Basic entity extractor for backward compatibility"""
+    
+    def extract_entities(self, query: str) -> List[str]:
+        """Extract basic entities from query"""
+        import re
+        
+        # Simple entity extraction - capitalized words, quoted phrases
+        entities = []
+        
+        # Find quoted phrases
+        quoted = re.findall(r'"([^"]*)"', query)
+        entities.extend(quoted)
+        
+        # Find capitalized words (potential proper nouns)
+        words = query.split()
+        for word in words:
+            # Remove punctuation for checking
+            clean_word = re.sub(r'[^\w]', '', word)
+            if len(clean_word) > 2 and clean_word[0].isupper() and clean_word[1:].islower():
+                entities.append(clean_word)
+        
+        # Remove duplicates and common words
+        stop_words = {'The', 'This', 'That', 'What', 'How', 'When', 'Where', 'Why'}
+        entities = [e for e in set(entities) if e not in stop_words]
+        
+        return entities[:5]  # Limit to 5 entities
+
+class QueryRewriter:
+    """Basic query rewriter for backward compatibility"""
+    
+    def rewrite_query(self, query: str, intent: 'QueryIntent') -> List[str]:
+        """Generate query rewrites based on intent"""
+        rewrites = []
+        
+        # Simple rewriting based on intent
+        if intent == QueryIntent.DEFINITIONAL:
+            rewrites.append(f"definition of {query}")
+            rewrites.append(f"what does {query} mean")
+        elif intent == QueryIntent.PROCEDURAL:
+            rewrites.append(f"steps for {query}")
+            rewrites.append(f"how to achieve {query}")
+        elif intent == QueryIntent.COMPARATIVE:
+            rewrites.append(f"comparison {query}")
+            rewrites.append(f"differences in {query}")
+        else:
+            # Generic rewrites
+            rewrites.append(f"information about {query}")
+            rewrites.append(f"details on {query}")
+        
+        return rewrites[:3]  # Limit to 3 rewrites
+
 class HighPerformanceCache:
     """OPTIMIZED: 10x better cache performance with persistent storage and smart eviction"""
     
@@ -563,7 +767,8 @@ class OptimizedQueryEnhancer:
         expanded_terms = []
         
         # Linguistic expansion (fast, no caching needed)
-        linguistic_expansions = self.query_expander.query_expander.expand_query_linguistic(normalized)
+        # Linguistic expansion (fallback implementation)
+        linguistic_expansions = self._expand_query_linguistic_simple(normalized)
         expanded_terms.extend(linguistic_expansions)
         
         # Semantic expansion with enhanced caching
@@ -650,6 +855,31 @@ class OptimizedQueryEnhancer:
         
         return enhanced
     
+
+    def _expand_query_linguistic_simple(self, query: str) -> List[str]:
+        """Simple linguistic expansion fallback"""
+        import re
+        
+        expansions = []
+        words = query.split()
+        
+        # Simple morphological variations
+        for word in words:
+            if len(word) > 4:
+                # Add plural/singular variations
+                if word.endswith('s') and not word.endswith('ss'):
+                    expansions.append(word[:-1])  # Remove 's'
+                elif not word.endswith('s'):
+                    expansions.append(word + 's')   # Add 's'
+                
+                # Add simple stemming
+                if word.endswith('ing'):
+                    expansions.append(word[:-3])
+                elif word.endswith('ed'):
+                    expansions.append(word[:-2])
+        
+        return list(set(expansions))[:5]  # Limit and deduplicate
+
     def get_performance_stats(self) -> Dict:
         """Enhanced performance statistics"""
         avg_enhancement_time = self.total_enhancement_time / max(self.enhancement_count, 1)
@@ -686,6 +916,31 @@ class OptimizedQueryEnhancer:
     def optimize_cache(self):
         """Run cache optimization"""
         optimized_query_cache.optimize()
+
+
+    def _expand_query_linguistic_simple(self, query: str) -> List[str]:
+            """Simple linguistic expansion fallback"""
+            import re
+            
+            expansions = []
+            words = query.split()
+            
+            # Simple morphological variations
+            for word in words:
+                if len(word) > 4:
+                    # Add plural/singular variations
+                    if word.endswith('s') and not word.endswith('ss'):
+                        expansions.append(word[:-1])  # Remove 's'
+                    elif not word.endswith('s'):
+                        expansions.append(word + 's')   # Add 's'
+                    
+                    # Add simple stemming
+                    if word.endswith('ing'):
+                        expansions.append(word[:-3])
+                    elif word.endswith('ed'):
+                        expansions.append(word[:-2])
+            
+            return list(set(expansions))[:5]  # Limit and deduplicate        
 
 # Convenience functions with optimization
 def create_optimized_query_enhancer(embedding_model: BaseEmbeddingModel = None,

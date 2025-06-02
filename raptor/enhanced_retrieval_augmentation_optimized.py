@@ -443,7 +443,7 @@ class SuperOptimizedEnhancedRetrievalAugmentation(RetrievalAugmentation):
         """SUPER OPTIMIZED: Comprehensive performance summary"""
         
         # Get base performance summary
-        base_summary = self.get_enhanced_performance_summary()
+        base_summary = self.get_performance_summary()
         
         # Add super optimization metrics
         super_summary = {
@@ -480,7 +480,19 @@ class SuperOptimizedEnhancedRetrievalAugmentation(RetrievalAugmentation):
         base_summary.update(super_summary)
         
         return base_summary
-    
+
+
+
+
+    def get_enhanced_performance_summary(self) -> Dict:
+        """
+        BACKWARD COMPATIBILITY: Alias for get_super_performance_summary
+        
+        Returns:
+            Dictionary containing enhanced performance metrics
+        """
+        return self.get_super_performance_summary()
+
     def optimize_all_performance(self):
         """Run comprehensive performance optimization"""
         start_time = time.time()
