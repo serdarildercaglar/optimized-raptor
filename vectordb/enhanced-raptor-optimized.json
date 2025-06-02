@@ -4,38 +4,38 @@
     "enable_caching": true,
     "enable_metrics": true,
     "enable_progress_tracking": true,
-    "max_concurrent_operations": 15,
+    "max_concurrent_operations": 12,
     "performance_monitoring": true,
     "cache_ttl": 7200,
-    "tree_builder_config": "<raptor.cluster_tree_builder.ClusterTreeConfig object at 0x719200ae0040>",
-    "tree_retriever_config": "<raptor.tree_retriever.TreeRetrieverConfig object at 0x719200ae00a0>",
-    "qa_model": "<raptor.QAModels.GPT41QAModel object at 0x719200ae00d0>",
+    "tree_builder_config": "<raptor.cluster_tree_builder_optimized.OptimizedClusterTreeConfig object at 0x7d7690c88e20>",
+    "tree_retriever_config": "<raptor.tree_retriever.TreeRetrieverConfig object at 0x7d7690c880a0>",
+    "qa_model": "<raptor.QAModels.GPT41QAModel object at 0x7d7690c880d0>",
     "tree_builder_type": "cluster"
   },
   "metrics": {
-    "build_time": 28.15943193435669,
-    "total_queries": 25,
-    "avg_query_time": 0.01678278923034668,
+    "build_time": 273.19536566734314,
+    "total_queries": 43,
+    "avg_query_time": 0.008666726045830304,
     "cache_hit_rate": 0.0,
     "embedding_cache_efficiency": 0.0,
-    "queries_per_second": 59.58485125891932,
+    "queries_per_second": 115.38382483903658,
     "nodes_processed": 0,
-    "layers_built": 1
+    "layers_built": 3
   },
   "progress": {
     "chunk_progress": 0.0,
-    "layer_progress": 1.0,
-    "node_progress": 1.0309278350515463,
-    "elapsed_time": 124.3814058303833,
-    "current_layer": 1,
+    "layer_progress": 3.0,
+    "node_progress": 1.0945454545454545,
+    "elapsed_time": 342.1584599018097,
+    "current_layer": 3,
     "total_layers": 0,
-    "created_nodes": 300,
-    "total_nodes": 291
+    "created_nodes": 301,
+    "total_nodes": 275
   },
   "tree_stats": {
-    "num_layers": 1,
-    "total_nodes": 300,
-    "leaf_nodes": 291,
-    "root_nodes": 9
+    "num_layers": 3,
+    "total_nodes": 301,
+    "leaf_nodes": 275,
+    "root_nodes": 3
   }
 }

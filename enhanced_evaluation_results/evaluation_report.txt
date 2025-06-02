@@ -36,9 +36,9 @@ HYBRID:
   F1@5: 0.000
   MRR: 0.000
   NDCG@5: 0.000
-  Avg Retrieval Time: 0.899s
-  Semantic Similarity: 0.779
-  Diversity: 0.147
+  Avg Retrieval Time: 0.000s
+  Semantic Similarity: 0.000
+  Diversity: 0.000
 
 
 PERFORMANCE ANALYSIS

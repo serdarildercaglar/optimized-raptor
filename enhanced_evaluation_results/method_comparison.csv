@@ -1,4 +1,4 @@
 Method,Precision@5,Recall@5,F1@5,MRR,NDCG@5,Avg_Retrieval_Time,Semantic_Similarity,Diversity,Total_Queries
 dense,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,3
 sparse,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,3
-hybrid,0.0,0.0,0.0,0.0,0.0,0.8994583288828532,0.7793190620522914,0.1469826892931494,3
+hybrid,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,3

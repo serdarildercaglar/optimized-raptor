@@ -28,36 +28,16 @@
     "total_queries": 3
   },
   "hybrid": {
-    "precision_at_k": {
-      "1": 0.0,
-      "3": 0.0,
-      "5": 0.0,
-      "10": 0.0
-    },
-    "recall_at_k": {
-      "1": 0.0,
-      "3": 0.0,
-      "5": 0.0,
-      "10": 0.0
-    },
-    "f1_at_k": {
-      "1": 0.0,
-      "3": 0.0,
-      "5": 0.0,
-      "10": 0.0
-    },
+    "precision_at_k": {},
+    "recall_at_k": {},
+    "f1_at_k": {},
     "mrr": 0.0,
-    "ndcg_at_k": {
-      "1": 0.0,
-      "3": 0.0,
-      "5": 0.0,
-      "10": 0.0
-    },
-    "avg_retrieval_time": 0.904695987701416,
-    "queries_per_second": 1.1053436884811718,
-    "semantic_similarity": 0.7793190620522914,
+    "ndcg_at_k": {},
+    "avg_retrieval_time": 0.0,
+    "queries_per_second": 0.0,
+    "semantic_similarity": 0.0,
     "coverage": 0.0,
-    "diversity": 0.1469826892931494,
+    "diversity": 0.0,
     "method_name": "hybrid",
     "total_queries": 3
   }
