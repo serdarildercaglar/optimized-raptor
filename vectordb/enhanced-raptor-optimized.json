@@ -1,0 +1,41 @@
+{
+  "config": {
+    "enable_async": true,
+    "enable_caching": true,
+    "enable_metrics": true,
+    "enable_progress_tracking": true,
+    "max_concurrent_operations": 12,
+    "performance_monitoring": true,
+    "cache_ttl": 7200,
+    "tree_builder_config": "<raptor.cluster_tree_builder.ClusterTreeConfig object at 0x7a66d5b652d0>",
+    "tree_retriever_config": "<raptor.tree_retriever.TreeRetrieverConfig object at 0x7a66d5b65660>",
+    "qa_model": "<raptor.QAModels.GPT41QAModel object at 0x7a66d5b657b0>",
+    "tree_builder_type": "cluster"
+  },
+  "metrics": {
+    "build_time": 16.825645208358765,
+    "total_queries": 6,
+    "avg_query_time": 0.022582054138183594,
+    "cache_hit_rate": 0.0,
+    "embedding_cache_efficiency": 0.0,
+    "queries_per_second": 44.28295113813928,
+    "nodes_processed": 0,
+    "layers_built": 1
+  },
+  "progress": {
+    "chunk_progress": 0.0,
+    "layer_progress": 1.0,
+    "node_progress": 1.025089605734767,
+    "elapsed_time": 26.970266103744507,
+    "current_layer": 1,
+    "total_layers": 0,
+    "created_nodes": 286,
+    "total_nodes": 279
+  },
+  "tree_stats": {
+    "num_layers": 1,
+    "total_nodes": 286,
+    "leaf_nodes": 279,
+    "root_nodes": 7
+  }
+}

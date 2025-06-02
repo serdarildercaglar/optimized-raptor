@@ -40,8 +40,15 @@ from .query_enhancement import (
     QueryIntent,
     create_query_enhancer
 )
-from .evaluation_framework import (
-    HybridRAPTOREvaluator,
-    EvaluationQuery,
-    create_sample_evaluation_set
-)
+# ✅ Optional import:
+try:
+    from .evaluation_framework import (
+        HybridRAPTOREvaluator,
+        EvaluationQuery,
+        create_sample_evaluation_set
+    )
+except ImportError:
+    # Evaluation framework requires pandas, matplotlib, seaborn
+    HybridRAPTOREvaluator = None
+    EvaluationQuery = None
+    create_sample_evaluation_set = None
