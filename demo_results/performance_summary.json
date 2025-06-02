@@ -1,0 +1,122 @@
+{
+  "pipeline": {
+    "build_time": 0.0,
+    "total_queries": 4,
+    "avg_query_time": 0.0580521821975708,
+    "cache_hit_rate": 0.0,
+    "embedding_cache_efficiency": 0.0,
+    "queries_per_second": 17.225881304455857,
+    "nodes_processed": 0,
+    "layers_built": 0
+  },
+  "tree_builder": {
+    "total_build_time": 0.0,
+    "embedding_batch_count": 0,
+    "summarization_batch_count": 0,
+    "cache_hit_rate": 0.0,
+    "layer_times": [],
+    "avg_layer_time": 0,
+    "embedding_efficiency": 0.0,
+    "nodes_per_second": 0.0
+  },
+  "retriever": {
+    "total_queries": 53,
+    "cache_hit_rate": 0.22641509433962265,
+    "avg_retrieval_time": 0.04590568902357569,
+    "avg_nodes_retrieved": 14.79245283018868,
+    "layer_usage_stats": {
+      "1": 175,
+      "0": 336,
+      "2": 31,
+      "3": 2
+    },
+    "total_retrieval_time": 2.4330015182495117,
+    "cache_size": 25,
+    "similarity_cache_size": 25
+  },
+  "progress": {},
+  "tree_stats": {
+    "num_layers": 3,
+    "total_nodes": 764,
+    "leaf_nodes": 662,
+    "root_nodes": 7
+  },
+  "hybrid_features": {
+    "enabled": true,
+    "query_enhancement_enabled": true,
+    "sparse_retrieval_enabled": true,
+    "reranking_enabled": true
+  },
+  "hybrid_metrics": {
+    "hybrid_queries": 32,
+    "query_enhancements": 5,
+    "sparse_retrievals": 4,
+    "total_hybrid_time": 15.133211374282837,
+    "fusion_improvements": []
+  },
+  "hybrid_retriever": {
+    "total_retrievals": 32,
+    "total_retrieval_time": 14.853764295578003,
+    "avg_retrieval_time": 0.4641801342368126,
+    "enhancement_time": 12.153229713439941,
+    "fusion_time": 0.0025022029876708984,
+    "rerank_time": 0.2729489803314209,
+    "fusion_method": "reciprocal_rank_fusion",
+    "dense_weight": 0.3,
+    "sparse_weight": 0.7,
+    "reranking_enabled": true,
+    "dense_retriever": {
+      "total_queries": 53,
+      "cache_hit_rate": 0.22641509433962265,
+      "avg_retrieval_time": 0.04590568902357569,
+      "avg_nodes_retrieved": 14.79245283018868,
+      "layer_usage_stats": {
+        "1": 175,
+        "0": 336,
+        "2": 31,
+        "3": 2
+      },
+      "total_retrieval_time": 2.4330015182495117,
+      "cache_size": 25,
+      "similarity_cache_size": 25
+    },
+    "sparse_retriever": {
+      "algorithm": "bm25_okapi",
+      "total_queries": 50,
+      "total_query_time": 0.21793246269226074,
+      "avg_query_time": 0.004358649253845215,
+      "cache_hits": 0,
+      "corpus_size": 764,
+      "vocab_size": 10446,
+      "avg_doc_length": 51.81544502617801
+    },
+    "query_enhancer": {
+      "total_enhancements": 37,
+      "total_enhancement_time": 14.858639001846313,
+      "avg_enhancement_time": 0.4015848378877382,
+      "vocabulary_size": 6610,
+      "corpus_nodes": 764
+    },
+    "reranker": {
+      "total_reranks": 32,
+      "avg_rerank_time": 0.008521579205989838
+    }
+  },
+  "sparse_retriever": {
+    "algorithm": "bm25_okapi",
+    "total_queries": 50,
+    "total_query_time": 0.21793246269226074,
+    "avg_query_time": 0.004358649253845215,
+    "cache_hits": 0,
+    "corpus_size": 764,
+    "vocab_size": 10446,
+    "avg_doc_length": 51.81544502617801
+  },
+  "query_enhancer": {
+    "total_enhancements": 37,
+    "total_enhancement_time": 14.858639001846313,
+    "avg_enhancement_time": 0.4015848378877382,
+    "vocabulary_size": 6610,
+    "corpus_nodes": 764
+  }
+}

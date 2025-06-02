@@ -12,6 +12,76 @@ from .sparse_retriever import AdvancedBM25Retriever, create_sparse_retriever
 from .query_enhancement import QueryEnhancer, create_query_enhancer, EnhancedQuery
 from .tree_retriever import TreeRetriever
 from .tree_structures import Tree
+from .query_enhancement import query_embedding_cache
+
+import gc
+import psutil
+import os
+import logging
+
+class MemoryOptimizer:
+    """Monitor and optimize memory usage - CRITICAL BOTTLENECK FIX"""
+    
+    def __init__(self):
+        self.memory_threshold_mb = 2048  # 2GB threshold
+        self.cleanup_interval = 100  # Cleanup every 100 operations
+        self.operation_count = 0
+    
+    @staticmethod
+    def get_memory_usage():
+        """Get current memory usage in MB"""
+        try:
+            process = psutil.Process(os.getpid())
+            return process.memory_info().rss / 1024 / 1024  # Convert to MB
+        except Exception:
+            return 0
+    
+    @staticmethod
+    def cleanup_memory(force: bool = False):
+        """Force garbage collection and memory cleanup"""
+        if force:
+            # Aggressive cleanup
+            for _ in range(3):
+                gc.collect()
+        else:
+            gc.collect()
+    
+    def check_and_optimize(self, force: bool = False):
+        """Check memory usage and optimize if needed"""
+        self.operation_count += 1
+        
+        # Periodic cleanup
+        if self.operation_count % self.cleanup_interval == 0:
+            self.cleanup_memory()
+        
+        # Threshold-based cleanup
+        current_usage = self.get_memory_usage()
+        if current_usage > self.memory_threshold_mb or force:
+            logging.warning(f"High memory usage: {current_usage:.1f} MB - cleaning up")
+            self.cleanup_memory(force=True)
+            
+            # Log after cleanup
+            after_usage = self.get_memory_usage()
+            saved = current_usage - after_usage
+            if saved > 0:
+                logging.info(f"Memory cleanup saved {saved:.1f} MB")
+            
+            return True
+        return False
+    
+    def get_memory_stats(self):
+        """Get memory statistics"""
+        return {
+            'current_usage_mb': self.get_memory_usage(),
+            'threshold_mb': self.memory_threshold_mb,
+            'operation_count': self.operation_count,
+            'cleanup_interval': self.cleanup_interval
+        }
+
+# Global memory optimizer instance
+memory_optimizer = MemoryOptimizer()
+
+
 
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
@@ -46,6 +116,146 @@ class HybridConfig:
     cache_dir: str = "hybrid_cache"
 
 
+import functools
+from typing import Callable, Any
+
+def async_error_handler(fallback_value=None, log_error=True):
+    """Decorator for async error handling - CRITICAL RELIABILITY FIX"""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs) -> Any:
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                if log_error:
+                    logging.error(f"Async error in {func.__name__}: {e}")
+                
+                # Memory cleanup on error
+                memory_optimizer.check_and_optimize(force=True)
+                
+                # Return fallback value instead of crashing
+                return fallback_value
+        return wrapper
+    return decorator
+
+def sync_error_handler(fallback_value=None, log_error=True):
+    """Decorator for sync error handling - CRITICAL RELIABILITY FIX"""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if log_error:
+                    logging.error(f"Sync error in {func.__name__}: {e}")
+                
+                # Memory cleanup on error
+                memory_optimizer.check_and_optimize(force=True)
+                
+                # Return fallback value instead of crashing
+                return fallback_value
+        return wrapper
+    return decorator
+
+def hybrid_retrieval_handler(fallback_method="dense"):
+    """Special error handler for hybrid retrieval with fallback methods"""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(self, query: str, method: str = "hybrid", **kwargs):
+            try:
+                return await func(self, query, method, **kwargs)
+            except Exception as e:
+                logging.warning(f"Hybrid retrieval failed for method '{method}': {e}")
+                
+                # Try fallback method
+                if method != fallback_method:
+                    logging.info(f"Trying fallback method: {fallback_method}")
+                    try:
+                        return await func(self, query, fallback_method, **kwargs)
+                    except Exception as fallback_e:
+                        logging.error(f"Fallback method also failed: {fallback_e}")
+                
+                # Final fallback: return empty results
+                return []
+        return wrapper
+    return decorator
+
+
+class ConfigValidator:
+    """Validate Enhanced RAPTOR configuration - CRITICAL RELIABILITY FIX"""
+    
+    @staticmethod
+    def validate_hybrid_config(hybrid_config) -> List[str]:
+        """Validate hybrid configuration and return error list"""
+        errors = []
+        
+        # Weight validation - CRITICAL
+        total_weight = hybrid_config.dense_weight + hybrid_config.sparse_weight
+        if abs(total_weight - 1.0) > 0.001:  # Allow small floating point errors
+            errors.append(f"Dense weight ({hybrid_config.dense_weight}) + "
+                         f"Sparse weight ({hybrid_config.sparse_weight}) must equal 1.0, got {total_weight}")
+        
+        # Weight range validation
+        if not (0 <= hybrid_config.dense_weight <= 1):
+            errors.append(f"dense_weight must be between 0 and 1, got {hybrid_config.dense_weight}")
+        
+        if not (0 <= hybrid_config.sparse_weight <= 1):
+            errors.append(f"sparse_weight must be between 0 and 1, got {hybrid_config.sparse_weight}")
+        
+        # BM25 parameter validation - CRITICAL
+        if hybrid_config.sparse_k1 <= 0:
+            errors.append(f"sparse_k1 must be positive, got {hybrid_config.sparse_k1}")
+        
+        if not (0 <= hybrid_config.sparse_b <= 1):
+            errors.append(f"sparse_b must be between 0 and 1, got {hybrid_config.sparse_b}")
+        
+        # Rerank validation
+        if hybrid_config.rerank_top_k <= 0:
+            errors.append(f"rerank_top_k must be positive, got {hybrid_config.rerank_top_k}")
+        
+        # Expansion validation
+        if hybrid_config.max_query_expansions < 0:
+            errors.append(f"max_query_expansions must be non-negative, got {hybrid_config.max_query_expansions}")
+        
+        return errors
+    
+    @staticmethod
+    def validate_ra_config(ra_config) -> List[str]:
+        """Validate retrieval augmentation configuration"""
+        errors = []
+        
+        # Cache TTL validation
+        if ra_config.cache_ttl <= 0:
+            errors.append(f"cache_ttl must be positive, got {ra_config.cache_ttl}")
+        
+        # Concurrent operations validation
+        if ra_config.max_concurrent_operations <= 0:
+            errors.append(f"max_concurrent_operations must be positive, got {ra_config.max_concurrent_operations}")
+        
+        # Token limits validation
+        if hasattr(ra_config, 'tb_max_tokens') and ra_config.tb_max_tokens <= 0:
+            errors.append(f"tb_max_tokens must be positive, got {ra_config.tb_max_tokens}")
+        
+        if hasattr(ra_config, 'tb_summarization_length') and ra_config.tb_summarization_length <= 0:
+            errors.append(f"tb_summarization_length must be positive, got {ra_config.tb_summarization_length}")
+        
+        return errors
+    
+    @staticmethod
+    def validate_and_raise(ra_config, hybrid_config):
+        """Validate both configs and raise exception if errors found"""
+        ra_errors = ConfigValidator.validate_ra_config(ra_config)
+        hybrid_errors = ConfigValidator.validate_hybrid_config(hybrid_config)
+        
+        all_errors = ra_errors + hybrid_errors
+        
+        if all_errors:
+            error_msg = "Configuration validation failed:\n" + "\n".join(f"- {error}" for error in all_errors)
+            raise ValueError(error_msg)
+        
+        logging.info("✅ Configuration validation passed")
+
+
 class EnhancedRetrievalAugmentation(RetrievalAugmentation):
     """
     Enhanced RAPTOR with hybrid retrieval capabilities
@@ -59,15 +269,30 @@ class EnhancedRetrievalAugmentation(RetrievalAugmentation):
     
     def __init__(self, config=None, tree=None, hybrid_config: HybridConfig = None):
         """
-        Initialize Enhanced RAPTOR with hybrid capabilities
-        
-        Args:
-            config: Standard RetrievalAugmentationConfig
-            tree: Tree instance or path to pickled tree
-            hybrid_config: HybridConfig for enhanced features
+        Initialize Enhanced RAPTOR with comprehensive validation and optimization
         """
-        # Initialize base RAPTOR
+        # CRITICAL: Configuration validation FIRST
+        if config is None:
+            config = RetrievalAugmentationConfig()
+        if not isinstance(config, RetrievalAugmentationConfig):
+            raise ValueError("config must be an instance of RetrievalAugmentationConfig")
+        
+        # Initialize hybrid configuration
+        self.hybrid_config = hybrid_config or HybridConfig()
+        
+        # CRITICAL: Validate configurations before proceeding
+        try:
+            ConfigValidator.validate_and_raise(config, self.hybrid_config)
+        except ValueError as e:
+            logging.error(f"Configuration validation failed: {e}")
+            raise
+        
+        # PERFORMANCE: Initialize memory optimizer
+        memory_optimizer.check_and_optimize()
+        
+        # Initialize base RAPTOR (existing code continues below...)
         super().__init__(config, tree)
+        
         
         # Initialize hybrid configuration
         self.hybrid_config = hybrid_config or HybridConfig()
@@ -91,6 +316,14 @@ class EnhancedRetrievalAugmentation(RetrievalAugmentation):
             self._initialize_hybrid_components()
         
         logging.info("Enhanced RAPTOR initialized with hybrid capabilities")
+        # FINAL: Log successful initialization with stats
+        memory_stats = memory_optimizer.get_memory_stats()
+        cache_stats = query_embedding_cache.get_stats()
+        
+        logging.info("✅ Enhanced RAPTOR initialized successfully!")
+        logging.info(f"📊 Memory usage: {memory_stats['current_usage_mb']:.1f} MB")
+        logging.info(f"💾 Query cache ready: {cache_stats['cache_size']} entries")
+        logging.info("🔄 Hybrid features enabled and validated")
     
     def _initialize_hybrid_components(self):
         """Initialize hybrid retrieval components"""
@@ -157,62 +390,63 @@ class EnhancedRetrievalAugmentation(RetrievalAugmentation):
         self._initialize_hybrid_components()
     
     def retrieve_enhanced(self, 
-                         query: str,
-                         method: str = "hybrid",  # "hybrid", "dense", "sparse"
-                         top_k: int = 10,
-                         max_tokens: int = 3500,
-                         enhance_query: bool = True,
-                         return_detailed: bool = False,
-                         **kwargs) -> Union[str, Tuple[str, List[HybridRetrievalResult]]]:
-        """
-        Enhanced retrieval with multiple methods
+                        query: str,
+                        method: str = "hybrid",
+                        top_k: int = 10,
+                        max_tokens: int = 3500,
+                        enhance_query: bool = True,
+                        return_detailed: bool = False,
+                        **kwargs) -> Union[str, Tuple[str, List[HybridRetrievalResult]]]:
+        """Enhanced retrieval with memory optimization"""
         
-        Args:
-            query: Search query
-            method: Retrieval method ("hybrid", "dense", "sparse")
-            top_k: Number of top results
-            max_tokens: Maximum tokens in response
-            enhance_query: Whether to enhance query
-            return_detailed: Return detailed results with scores
-            **kwargs: Additional arguments
-            
-        Returns:
-            Context string or (context, detailed_results) if return_detailed=True
-        """
-        start_time = time.time()
+        # MEMORY OPTIMIZATION - START
+        memory_optimizer.check_and_optimize()
+        start_memory = memory_optimizer.get_memory_usage()
         
-        if method == "hybrid" and self.hybrid_retriever:
-            # Use hybrid retrieval
-            results = asyncio.run(self.hybrid_retriever.retrieve_hybrid_async(
-                query, top_k, max_tokens, enhance_query, **kwargs
-            ))
-            context = "\n\n".join([result.node.text for result in results])
+        try:
+            start_time = time.time()
             
-            self.hybrid_metrics['hybrid_queries'] += 1
+            # EXISTING RETRIEVAL LOGIC (keep unchanged)
+            if method == "hybrid" and self.hybrid_retriever:
+                results = asyncio.run(self.hybrid_retriever.retrieve_hybrid_async(
+                    query, top_k, max_tokens, enhance_query, **kwargs
+                ))
+                context = "\n\n".join([result.node.text for result in results])
+                self.hybrid_metrics['hybrid_queries'] += 1
+                
+            elif method == "sparse" and self.sparse_retriever:
+                sparse_results = asyncio.run(self.sparse_retriever.retrieve_async(
+                    query, top_k
+                ))
+                context = "\n\n".join([result.node.text for result in sparse_results])
+                results = sparse_results
+                self.hybrid_metrics['sparse_retrievals'] += 1
+                
+            else:
+                context = self.retrieve(query, top_k=top_k, max_tokens=max_tokens, **kwargs)
+                results = []
             
-        elif method == "sparse" and self.sparse_retriever:
-            # Use sparse retrieval only
-            sparse_results = asyncio.run(self.sparse_retriever.retrieve_async(
-                query, top_k
-            ))
-            context = "\n\n".join([result.node.text for result in sparse_results])
-            results = sparse_results  # For return_detailed
+            # Update metrics
+            retrieval_time = time.time() - start_time
+            self.hybrid_metrics['total_hybrid_time'] += retrieval_time
             
-            self.hybrid_metrics['sparse_retrievals'] += 1
+            # MEMORY OPTIMIZATION - END
+            end_memory = memory_optimizer.get_memory_usage()
+            memory_used = end_memory - start_memory
             
-        else:
-            # Fallback to standard dense retrieval
-            context = self.retrieve(query, top_k=top_k, max_tokens=max_tokens, **kwargs)
-            results = []  # No detailed results for standard retrieval
-        
-        # Update metrics
-        retrieval_time = time.time() - start_time
-        self.hybrid_metrics['total_hybrid_time'] += retrieval_time
-        
-        if return_detailed:
-            return context, results
-        else:
-            return context
+            if memory_used > 100:  # If used more than 100MB
+                memory_optimizer.check_and_optimize(force=True)
+            
+            if return_detailed:
+                return context, results
+            else:
+                return context
+                
+        except Exception as e:
+            # MEMORY CLEANUP ON ERROR
+            memory_optimizer.check_and_optimize(force=True)
+            logging.error(f"Enhanced retrieval failed: {e}")
+            raise
     
     def enhance_query_only(self, query: str) -> EnhancedQuery:
         """

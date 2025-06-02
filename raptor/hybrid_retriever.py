@@ -417,26 +417,28 @@ class HybridRetriever(BaseRetriever):
             search_queries = [query]
         
         # Step 2: Dense Retrieval
+# Step 2: Dense Retrieval - FIXED
         dense_results = []
-        for search_query in search_queries[:2]:  # Limit to 2 variants for efficiency
+        for search_query in search_queries[:2]:
             try:
-                if hasattr(self.dense_retriever, 'retrieve_async'):
-                    context = await self.dense_retriever.retrieve_async(
-                        search_query, top_k=top_k * 2, max_tokens=max_tokens, **kwargs
-                    )
-                else:
-                    # Fallback to sync
-                    context = self.dense_retriever.retrieve(
-                        search_query, top_k=top_k * 2, max_tokens=max_tokens, **kwargs
-                    )
-                
-                # Extract nodes and scores (this is a simplified approach)
-                # In practice, you'd need to modify TreeRetriever to return structured results
-                dense_results.extend(self._extract_dense_results(context, search_query))
-                
+                # FIXED: Use correct parameter count
+                query_results = self._extract_dense_results(search_query)
+                dense_results.extend(query_results)
             except Exception as e:
-                logging.warning(f"Dense retrieval failed for query '{search_query}': {e}")
+                logging.warning(f"Dense retrieval failed for '{search_query}': {e}")
         
+        # Remove duplicates from dense results
+        seen_nodes = set()
+        unique_dense_results = []
+        for node, score in dense_results:
+            node_id = id(node)
+            if node_id not in seen_nodes:
+                seen_nodes.add(node_id)
+                unique_dense_results.append((node, score))
+        
+        dense_results = unique_dense_results[:top_k * 2]
+                
+            
         # Step 3: Sparse Retrieval
         sparse_results = []
         for search_query in search_queries[:2]:  # Limit to 2 variants for efficiency
@@ -475,17 +477,35 @@ class HybridRetriever(BaseRetriever):
         
         return final_results
     
-    def _extract_dense_results(self, context: str, query: str) -> List[Tuple[Node, float]]:
+    def _extract_dense_results(self, query: str) -> List[Tuple[Node, float]]:
         """
-        Extract nodes and scores from dense retrieval context
-        This is a placeholder - you'd need to modify TreeRetriever to return structured results
-        """
-        # This is a simplified approach - in practice you'd modify TreeRetriever
-        # to return List[Tuple[Node, float]] instead of concatenated text
+        FIXED: Extract nodes and scores from dense retrieval using new TreeRetriever method
         
-        # For now, create dummy results
-        # You should modify TreeRetriever.retrieve() to return structured results
-        return []
+        Args:
+            query: Search query
+            
+        Returns:
+            List[Tuple[Node, float]]: List of (node, similarity_score) tuples
+        """
+        try:
+            # Use the new retrieve_with_nodes method we just added
+            if hasattr(self.dense_retriever, 'retrieve_with_nodes'):
+                return self.dense_retriever.retrieve_with_nodes(
+                    query, top_k=15, max_tokens=4000
+                )
+            else:
+                # Fallback: Use standard retrieval and create dummy results
+                logging.warning("TreeRetriever doesn't have retrieve_with_nodes method")
+                context = self.dense_retriever.retrieve(
+                    query, top_k=15, max_tokens=4000
+                )
+                # Create a dummy node with the context
+                dummy_node = Node(text=context, index=-1, children=set(), embeddings={})
+                return [(dummy_node, 0.8)]
+                
+        except Exception as e:
+            logging.warning(f"Dense retrieval failed: {e}")
+            return []
     
     def _filter_by_tokens(self, results: List[HybridRetrievalResult], 
                          max_tokens: int, top_k: int) -> List[HybridRetrievalResult]:

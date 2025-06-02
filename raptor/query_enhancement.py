@@ -18,6 +18,65 @@ from .tree_structures import Node
 logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
 
 
+import time
+from typing import Optional, List
+
+class QueryEmbeddingCache:
+    """High-performance query embedding cache - CRITICAL PERFORMANCE FIX"""
+    
+    def __init__(self, max_size: int = 1000, ttl: int = 3600):
+        self.cache = {}
+        self.access_times = {}
+        self.max_size = max_size
+        self.ttl = ttl
+        self.hits = 0
+        self.misses = 0
+    
+    def get(self, query: str, model_name: str) -> Optional[List[float]]:
+        """Get cached embedding"""
+        cache_key = f"{model_name}:{hash(query)}"
+        
+        if cache_key in self.cache:
+            embedding, timestamp = self.cache[cache_key]
+            if time.time() - timestamp < self.ttl:
+                self.access_times[cache_key] = time.time()
+                self.hits += 1
+                return embedding
+            else:
+                del self.cache[cache_key]
+                del self.access_times[cache_key]
+        
+        self.misses += 1
+        return None
+    
+    def set(self, query: str, model_name: str, embedding: List[float]):
+        """Cache embedding with LRU eviction"""
+        cache_key = f"{model_name}:{hash(query)}"
+        
+        # LRU eviction if cache is full
+        if len(self.cache) >= self.max_size:
+            lru_key = min(self.access_times.keys(), key=lambda k: self.access_times[k])
+            del self.cache[lru_key]
+            del self.access_times[lru_key]
+        
+        self.cache[cache_key] = (embedding, time.time())
+        self.access_times[cache_key] = time.time()
+    
+    def get_stats(self):
+        """Get cache performance stats"""
+        total = self.hits + self.misses
+        hit_rate = self.hits / total if total > 0 else 0
+        return {
+            'hits': self.hits,
+            'misses': self.misses,
+            'hit_rate': hit_rate,
+            'cache_size': len(self.cache)
+        }
+
+# Global query embedding cache instance
+query_embedding_cache = QueryEmbeddingCache()
+
+
 class QueryIntent(Enum):
     """Different types of query intents"""
     FACTUAL = "factual"          # What is X? When did Y happen?
@@ -46,6 +105,11 @@ class EnhancedQuery:
     confidence_score: float
     processing_time: float
     metadata: Dict = field(default_factory=dict)
+
+
+
+
+
 
 
 class QueryNormalizer:
@@ -271,7 +335,61 @@ class QueryExpander:
         # Sort by similarity and return top terms
         expansions.sort(key=lambda x: x[1], reverse=True)
         return [term for term, _ in expansions[:max_expansions]]
-    
+
+
+    async def _expand_with_cached_embedding(self, query: str, query_embedding: List[float], 
+                                        max_expansions: int = 5,
+                                        similarity_threshold: float = 0.7) -> List[str]:
+        """
+        PERFORMANCE FIX: Expand query using pre-computed/cached embedding
+        
+        Args:
+            query: Original query
+            query_embedding: Pre-computed query embedding (from cache or fresh)
+            max_expansions: Maximum number of expansion terms
+            similarity_threshold: Minimum similarity for expansion
+            
+        Returns:
+            List of expansion terms
+        """
+        if not self.vocabulary:
+            return []
+        
+        # Find similar terms using cached embedding
+        expansions = []
+        
+        # Sample vocabulary for efficiency (you can optimize this)
+        sample_size = min(1000, len(self.vocabulary))
+        vocab_sample = np.random.choice(self.vocabulary, sample_size, replace=False)
+        
+        for term in vocab_sample:
+            if term in query.lower():
+                continue  # Skip terms already in query
+            
+            # Get term embedding (with caching)
+            model_name = self.embedding_model.__class__.__name__
+            
+            # Check cache for term embedding
+            term_embedding = query_embedding_cache.get(term, f"{model_name}_term")
+            
+            if term_embedding is None:
+                # Create and cache term embedding
+                term_embedding = await self.embedding_model.create_embedding_async(term)
+                query_embedding_cache.set(term, f"{model_name}_term", term_embedding)
+            
+            # Calculate similarity using cached embeddings
+            similarity = cosine_similarity(
+                [query_embedding], [term_embedding]
+            )[0][0]
+            
+            if similarity >= similarity_threshold:
+                expansions.append((term, similarity))
+        
+        # Sort by similarity and return top terms
+        expansions.sort(key=lambda x: x[1], reverse=True)
+        return [term for term, _ in expansions[:max_expansions]]
+
+
     def expand_query_linguistic(self, query: str) -> List[str]:
         """
         Expand query using linguistic rules
@@ -410,7 +528,38 @@ class QueryEnhancer:
         entities = self.entity_extractor.extract_entities(query)
         
         # Step 4: Expand query
+        # Step 4: Expand query - WITH PERFORMANCE CACHE
         expanded_terms = []
+        
+        # Linguistic expansion (fast)
+        linguistic_expansions = self.query_expander.expand_query_linguistic(normalized)
+        expanded_terms.extend(linguistic_expansions)
+        
+        # Semantic expansion with caching (PERFORMANCE FIX)
+        if include_semantic_expansion:
+            try:
+                # Check cache first
+                model_name = self.embedding_model.__class__.__name__
+                cached_embedding = query_embedding_cache.get(normalized, model_name)
+                
+                if cached_embedding:
+                    # Use cached embedding
+                    semantic_expansions = await self.query_expander._expand_with_cached_embedding(
+                        normalized, cached_embedding, max_expansions
+                    )
+                else:
+                    # Create new embedding and cache it
+                    query_embedding = await self.embedding_model.create_embedding_async(normalized)
+                    query_embedding_cache.set(normalized, model_name, query_embedding)
+                    
+                    semantic_expansions = await self.query_expander._expand_with_cached_embedding(
+                        normalized, query_embedding, max_expansions
+                    )
+                
+                expanded_terms.extend(semantic_expansions)
+                
+            except Exception as e:
+                logging.warning(f"Semantic expansion failed: {e}")
         
         # Linguistic expansion
         linguistic_expansions = self.query_expander.expand_query_linguistic(normalized)
