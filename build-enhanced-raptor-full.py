@@ -77,7 +77,7 @@ hybrid_config = HybridConfig(
     enable_hybrid=True,               # Enable hybrid retrieval
     enable_query_enhancement=True,    # Query enhancement & expansion
     enable_sparse_retrieval=True,     # BM25 sparse retrieval
-    enable_reranking=True,           # Cross-encoder reranking
+    enable_reranking=False,           # Cross-encoder reranking
     
     # ===== FUSION CONFIGURATION =====
     fusion_method=FusionMethod.RRF,   # Reciprocal Rank Fusion (best for general use)
