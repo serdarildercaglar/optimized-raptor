@@ -1,0 +1,143 @@
+{
+  "hybrid_config": {
+    "enable_hybrid": true,
+    "enable_query_enhancement": true,
+    "enable_sparse_retrieval": true,
+    "enable_reranking": true,
+    "fusion_method": "reciprocal_rank_fusion",
+    "dense_weight": 0.6,
+    "sparse_weight": 0.4,
+    "sparse_algorithm": "bm25_okapi",
+    "max_query_expansions": 8,
+    "rerank_top_k": 25
+  },
+  "performance_summary": {
+    "pipeline": {
+      "build_time": 25.532614946365356,
+      "total_queries": 25,
+      "avg_query_time": 0.016493310928344728,
+      "cache_hit_rate": 0.0,
+      "embedding_cache_efficiency": 0.0,
+      "queries_per_second": 60.63064016342777,
+      "nodes_processed": 0,
+      "layers_built": 1
+    },
+    "tree_builder": {
+      "total_build_time": 25.532614946365356,
+      "embedding_batch_count": 1,
+      "summarization_batch_count": 1,
+      "cache_hit_rate": 0.0,
+      "layer_times": [
+        1.490264892578125
+      ],
+      "avg_layer_time": 1.490264892578125,
+      "embedding_efficiency": 0.039165592795748994,
+      "nodes_per_second": 11.475518689154454
+    },
+    "retriever": {
+      "total_queries": 29,
+      "cache_hit_rate": 0.5172413793103449,
+      "avg_retrieval_time": 0.019525190879558695,
+      "avg_nodes_retrieved": 9.137931034482758,
+      "layer_usage_stats": {
+        "0": 104,
+        "1": 11
+      },
+      "total_retrieval_time": 0.5662305355072021,
+      "cache_size": 14,
+      "similarity_cache_size": 14
+    },
+    "progress": {
+      "chunk_progress": 0.0,
+      "layer_progress": 1.0,
+      "node_progress": 1.0353356890459364,
+      "elapsed_time": 104.00507307052612,
+      "current_layer": 1,
+      "total_layers": 0,
+      "created_nodes": 293,
+      "total_nodes": 283
+    },
+    "tree_stats": {
+      "num_layers": 1,
+      "total_nodes": 293,
+      "leaf_nodes": 283,
+      "root_nodes": 10
+    },
+    "hybrid_features": {
+      "enabled": true,
+      "query_enhancement_enabled": true,
+      "sparse_retrieval_enabled": true,
+      "reranking_enabled": true
+    },
+    "hybrid_metrics": {
+      "hybrid_queries": 18,
+      "query_enhancements": 4,
+      "sparse_retrievals": 7,
+      "total_hybrid_time": 48.15475130081177,
+      "fusion_improvements": []
+    },
+    "hybrid_retriever": {
+      "total_retrievals": 18,
+      "total_retrieval_time": 47.84199786186218,
+      "avg_retrieval_time": 2.6578887701034546,
+      "enhancement_time": 46.8541157245636,
+      "fusion_time": 0.002066373825073242,
+      "rerank_time": 0.20957374572753906,
+      "fusion_method": "reciprocal_rank_fusion",
+      "dense_weight": 0.6,
+      "sparse_weight": 0.4,
+      "reranking_enabled": true,
+      "dense_retriever": {
+        "total_queries": 29,
+        "cache_hit_rate": 0.5172413793103449,
+        "avg_retrieval_time": 0.019525190879558695,
+        "avg_nodes_retrieved": 9.137931034482758,
+        "layer_usage_stats": {
+          "0": 104,
+          "1": 11
+        },
+        "total_retrieval_time": 0.5662305355072021,
+        "cache_size": 14,
+        "similarity_cache_size": 14
+      },
+      "sparse_retriever": {
+        "algorithm": "bm25_okapi",
+        "total_queries": 36,
+        "total_query_time": 0.05083417892456055,
+        "avg_query_time": 0.0014120605256822375,
+        "cache_hits": 0,
+        "corpus_size": 293,
+        "vocab_size": 3556,
+        "avg_doc_length": 26.266211604095563
+      },
+      "query_enhancer": {
+        "total_enhancements": 22,
+        "total_enhancement_time": 50.256019592285156,
+        "avg_enhancement_time": 2.2843645269220527,
+        "vocabulary_size": 2052,
+        "corpus_nodes": 293
+      },
+      "reranker": {
+        "total_reranks": 18,
+        "avg_rerank_time": 0.011633422639634874
+      }
+    },
+    "sparse_retriever": {
+      "algorithm": "bm25_okapi",
+      "total_queries": 36,
+      "total_query_time": 0.05083417892456055,
+      "avg_query_time": 0.0014120605256822375,
+      "cache_hits": 0,
+      "corpus_size": 293,
+      "vocab_size": 3556,
+      "avg_doc_length": 26.266211604095563
+    },
+    "query_enhancer": {
+      "total_enhancements": 22,
+      "total_enhancement_time": 50.256019592285156,
+      "avg_enhancement_time": 2.2843645269220527,
+      "vocabulary_size": 2052,
+      "corpus_nodes": 293
+    }
+  }
+}
