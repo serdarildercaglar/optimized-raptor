@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # DOSYA: scripts/deploy.sh
-# AÇIKLAMA: Production deployment script for RAPTOR - Fixed Version
+# AÇIKLAMA: Production deployment script for RAPTOR with GPU support
 
 set -e
 
-echo "🚀 RAPTOR Production Deployment"
-echo "================================"
+echo "🚀 RAPTOR Production Deployment (GPU Optimized)"
+echo "================================================"
 
 # Configuration
 ENVIRONMENT=${ENVIRONMENT:-production}
@@ -59,7 +59,7 @@ check_docker_compose() {
     fi
 }
 
-# Check prerequisites
+# Check prerequisites including GPU
 check_prerequisites() {
     log_step "Checking prerequisites..."
     
@@ -70,7 +70,7 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check Docker Compose (updated)
+    # Check Docker Compose
     if ! check_docker_compose; then
         log_error "Docker Compose is required but not installed"
         echo "Install Docker Compose: https://docs.docker.com/compose/install/"
@@ -83,6 +83,35 @@ check_prerequisites() {
     if ! docker info &> /dev/null; then
         log_error "Docker is not running. Please start Docker service."
         exit 1
+    fi
+    
+    # Check GPU support
+    log_info "Checking GPU support..."
+    if command -v nvidia-smi &> /dev/null; then
+        GPU_INFO=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits | head -1)
+        log_info "✅ GPU detected: $GPU_INFO"
+        
+        # Check Docker GPU support
+        if docker run --rm --gpus all nvidia/cuda:11.8-base-ubuntu22.04 nvidia-smi &> /dev/null; then
+            log_info "✅ Docker GPU support verified"
+        else
+            log_warn "⚠️ Docker GPU support not available"
+            log_warn "Install nvidia-container-toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html"
+        fi
+    else
+        log_warn "⚠️ No GPU detected (nvidia-smi not found)"
+        log_warn "RAPTOR will run on CPU (slower performance)"
+    fi
+    
+    # Check HuggingFace cache
+    log_info "Checking HuggingFace cache..."
+    HF_CACHE_DIR="/home/$(whoami)/.cache/huggingface"
+    if [ -d "$HF_CACHE_DIR" ]; then
+        CACHE_SIZE=$(du -sh "$HF_CACHE_DIR" 2>/dev/null | cut -f1 || echo "unknown")
+        log_info "✅ HuggingFace cache found: $CACHE_SIZE"
+    else
+        log_warn "⚠️ HuggingFace cache not found at $HF_CACHE_DIR"
+        log_warn "Models will be downloaded during startup (slower)"
     fi
     
     # Check .env file
@@ -115,7 +144,7 @@ check_prerequisites() {
     fi
     
     # Create required directories
-    mkdir -p logs config monitoring/prometheus monitoring/grafana nginx ssl
+    mkdir -p logs config monitoring/prometheus monitoring/grafana nginx ssl embedding_cache query_cache
     
     log_info "Prerequisites check passed ✅"
 }
@@ -185,194 +214,12 @@ scrape_configs:
 EOF
     fi
     
-    # Create basic nginx config if missing
-    if [ ! -f "nginx/nginx.conf" ]; then
-        log_info "Creating Nginx configuration..."
-        mkdir -p nginx
-        cat > nginx/nginx.conf << 'EOF'
-events {
-    worker_connections 1024;
-}
-
-http {
-    upstream raptor_backend {
-        server raptor-app:8000;
-    }
-
-    server {
-        listen 80;
-        
-        location / {
-            proxy_pass http://raptor_backend;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-        
-        location /ws/ {
-            proxy_pass http://raptor_backend;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-            proxy_set_header Host $host;
-        }
-    }
-}
-EOF
-    fi
-    
     log_info "Configuration files created ✅"
-}
-
-# Create minimal docker-compose if missing
-create_docker_compose() {
-    if [ ! -f "$COMPOSE_FILE" ]; then
-        log_info "Creating Docker Compose configuration..."
-        cat > $COMPOSE_FILE << 'EOF'
-version: '3.8'
-
-services:
-  redis:
-    image: redis:7-alpine
-    container_name: raptor-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
-    command: redis-server /usr/local/etc/redis/redis.conf
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-    networks:
-      - raptor-network
-
-  raptor-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: raptor-app
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - RAPTOR_ENV=production
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - SERVER_HOST=0.0.0.0
-      - SERVER_PORT=8000
-    volumes:
-      - ./vectordb:/app/vectordb:ro
-      - ./logs:/app/logs
-      - ./config:/app/config:ro
-    depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - raptor-network
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: raptor-prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=30d'
-    networks:
-      - raptor-network
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: raptor-grafana
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data:/var/lib/grafana
-    networks:
-      - raptor-network
-
-volumes:
-  redis_data:
-  prometheus_data:
-  grafana_data:
-
-networks:
-  raptor-network:
-    driver: bridge
-EOF
-    fi
-}
-
-# Create minimal Dockerfile if missing
-create_dockerfile() {
-    if [ ! -f "Dockerfile" ]; then
-        log_info "Creating Dockerfile..."
-        cat > Dockerfile << 'EOF'
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Install additional production dependencies
-RUN pip install --no-cache-dir uvicorn[standard] psutil prometheus_client redis[hiredis]
-
-# Copy application code
-COPY . .
-
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash raptor && \
-    chown -R raptor:raptor /app && \
-    mkdir -p logs && \
-    chown raptor:raptor logs
-
-USER raptor
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5)"
-
-# Run application
-CMD ["python", "generic-qa-server.py"]
-EOF
-    fi
 }
 
 # Build images
 build_images() {
-    log_step "Building Docker images..."
+    log_step "Building GPU-optimized Docker images..."
     
     # Clean up old images if requested
     if [ "${CLEAN_BUILD:-false}" = "true" ]; then
@@ -381,7 +228,7 @@ build_images() {
     fi
     
     # Build images
-    log_info "Building images with build target: $BUILD_TARGET"
+    log_info "Building images with GPU support..."
     $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE build --no-cache
     
     if [ $? -eq 0 ]; then
@@ -401,7 +248,7 @@ deploy_services() {
     $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down --remove-orphans || true
     
     # Start services
-    log_info "Starting services..."
+    log_info "Starting services with GPU support..."
     $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE up -d
     
     if [ $? -eq 0 ]; then
@@ -412,13 +259,13 @@ deploy_services() {
     fi
 }
 
-# Health check
+# Enhanced health check with GPU startup time
 health_check() {
     log_step "Performing health checks..."
     
-    # Wait for services to start
-    log_info "Waiting for services to start (60 seconds)..."
-    sleep 60
+    # Wait for services to start (increased for GPU model loading)
+    log_info "Waiting for services to start (120 seconds for GPU model loading)..."
+    sleep 120
     
     local health_ok=true
     
@@ -431,22 +278,24 @@ health_check() {
         health_ok=false
     fi
     
-    # Check RAPTOR app (multiple attempts)
-    log_info "Checking RAPTOR app..."
+    # Check RAPTOR app (more attempts for GPU startup)
+    log_info "Checking RAPTOR app (GPU model loading may take time)..."
     local app_healthy=false
-    for i in {1..5}; do
+    for i in {1..10}; do
         if curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
             log_info "✅ RAPTOR app is healthy"
             app_healthy=true
             break
         else
-            log_warn "RAPTOR app check attempt $i/5 failed, retrying..."
-            sleep 10
+            log_warn "RAPTOR app check attempt $i/10 failed, retrying in 15s..."
+            sleep 15
         fi
     done
     
     if [ "$app_healthy" = false ]; then
         log_error "❌ RAPTOR app health check failed"
+        log_info "Checking container logs for debugging..."
+        $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE logs --tail=50 raptor-app
         health_ok=false
     fi
     
@@ -475,11 +324,11 @@ health_check() {
     fi
 }
 
-# Show deployment info
+# Show deployment info with GPU details
 show_info() {
     echo ""
-    echo "🎉 Deployment completed successfully!"
-    echo "====================================="
+    echo "🎉 GPU-Optimized RAPTOR Deployment Successful!"
+    echo "=============================================="
     echo ""
     echo "📋 Service URLs:"
     echo "   🌐 RAPTOR API:     http://localhost:8000"
@@ -487,18 +336,28 @@ show_info() {
     echo "   📊 Prometheus:     http://localhost:9090"
     echo "   📈 Grafana:        http://localhost:3000 (admin/admin)"
     echo ""
+    echo "🚀 GPU Information:"
+    if command -v nvidia-smi &> /dev/null; then
+        echo "   $(nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader,nounits | head -1)"
+        echo "   📊 Monitor GPU: watch nvidia-smi"
+    else
+        echo "   ⚠️ Running on CPU (no GPU detected)"
+    fi
+    echo ""
     echo "📋 Useful Commands:"
-    echo "   📜 View logs:       $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE logs -f"
+    echo "   📜 View logs:       $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE logs -f raptor-app"
+    echo "   🔧 Check GPU:       docker exec raptor-app nvidia-smi"
     echo "   ⏹️  Stop services:   $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down"
-    echo "   🔄 Restart:         $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE restart"
+    echo "   🔄 Restart:         $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE restart raptor-app"
     echo "   📊 Service status:  $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE ps"
     echo ""
     echo "🧪 Quick Test:"
     echo "   curl http://localhost:8000/health"
     echo ""
-    echo "📁 Log Locations:"
-    echo "   📜 App logs:        ./logs/"
-    echo "   🐳 Container logs:  $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE logs"
+    echo "📁 Cache Locations:"
+    echo "   🧠 HuggingFace:     /home/$(whoami)/.cache/huggingface (mounted)"
+    echo "   💾 Embeddings:      ./embedding_cache/"
+    echo "   🔍 Queries:         ./query_cache/"
     echo ""
 }
 
@@ -519,7 +378,7 @@ cleanup() {
 
 # Show help
 show_help() {
-    echo "🚀 RAPTOR Production Deployment Script"
+    echo "🚀 RAPTOR Production Deployment Script (GPU Optimized)"
     echo ""
     echo "Usage: $0 [OPTIONS]"
     echo ""
@@ -531,6 +390,7 @@ show_help() {
     echo "  --cleanup           Full cleanup (remove all containers and volumes)"
     echo "  --no-build          Skip building images"
     echo "  --no-health         Skip health checks"
+    echo "  --gpu-test          Test GPU setup only"
     echo "  --dry-run           Show what would be done without executing"
     echo ""
     echo "Environment Variables:"
@@ -540,12 +400,25 @@ show_help() {
     echo "  SKIP_HEALTH         Skip health checks (true/false)"
     echo ""
     echo "Examples:"
-    echo "  $0                                    # Standard production deployment"
+    echo "  $0                                    # Standard GPU production deployment"
     echo "  $0 --env development                  # Development deployment"
     echo "  $0 --clean                           # Clean build deployment"
+    echo "  $0 --gpu-test                        # Test GPU setup only"
     echo "  $0 --rollback                        # Rollback current deployment"
-    echo "  $0 --cleanup                         # Full cleanup"
     echo ""
+}
+
+# GPU test function
+test_gpu_only() {
+    log_step "Testing GPU setup..."
+    
+    if [ -f "test-gpu-setup.sh" ]; then
+        chmod +x test-gpu-setup.sh
+        ./test-gpu-setup.sh
+    else
+        log_error "test-gpu-setup.sh not found"
+        exit 1
+    fi
 }
 
 # Parse command line arguments
@@ -580,6 +453,10 @@ parse_args() {
                 SKIP_HEALTH=true
                 shift
                 ;;
+            --gpu-test)
+                test_gpu_only
+                exit 0
+                ;;
             --dry-run)
                 DRY_RUN=true
                 shift
@@ -595,26 +472,24 @@ parse_args() {
 
 # Main deployment function
 main() {
-    echo "🚀 RAPTOR Production Deployment"
+    echo "🚀 RAPTOR Production Deployment (GPU Optimized)"
     echo "Environment: $ENVIRONMENT"
-    echo "================================"
+    echo "================================================"
     
     if [ "${DRY_RUN:-false}" = "true" ]; then
         log_info "🧪 DRY RUN MODE - No changes will be made"
         echo "Would execute:"
-        echo "1. Check prerequisites"
+        echo "1. Check prerequisites (including GPU)"
         echo "2. Create configuration files"
-        echo "3. Build Docker images"
-        echo "4. Deploy services"
-        echo "5. Run health checks"
+        echo "3. Build GPU-optimized Docker images"
+        echo "4. Deploy services with GPU support"
+        echo "5. Run health checks (with extended GPU startup time)"
         exit 0
     fi
     
     # Execute deployment steps
     check_prerequisites
     create_configs
-    create_docker_compose
-    create_dockerfile
     
     if [ "${SKIP_BUILD:-false}" != "true" ]; then
         build_images
@@ -645,4 +520,4 @@ trap rollback SIGINT SIGTERM
 parse_args "$@"
 main
 
-echo "✅ RAPTOR Production deployment completed successfully!"
+echo "✅ GPU-optimized RAPTOR deployment completed successfully!"
