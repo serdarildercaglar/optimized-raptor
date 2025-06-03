@@ -43,16 +43,17 @@ class GPT41QAModel(BaseQAModel):
             str: The generated summary.
         """
         try:
-# ✅ DOĞRU - chat.completions.create kullanmalı  
-            response = self.client.chat.completions.create(
+            response = self.client.completions.create(
+                prompt=f"using the folloing information {context}. Answer the following question in less than 5-7 words, if possible: {question}",
+                temperature=0,
+                max_tokens=max_tokens,
+                top_p=1,
+                frequency_penalty=0,
+                presence_penalty=0,
+                stop=stop_sequence,
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": f"Using the following information: {context}\n\nAnswer this question: {question}"}
-                ],
-                temperature=0
             )
-            return response.choices[0].message.content.strip()
+            return response.choices[0].text.strip()
 
         except Exception as e:
             print(e)

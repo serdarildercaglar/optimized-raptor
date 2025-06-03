@@ -1,5 +1,3 @@
-# Enhanced RAPTOR Requirements
-# Core dependencies (existing)
 faiss-gpu==1.7.2
 numpy==1.26.3
 openai==1.82.1
@@ -14,56 +12,3 @@ urllib3==2.4.0
 fastapi==0.115.12
 uvicorn==0.34.2
 aiohttp
-
-# New dependencies for hybrid features
-rank-bm25==0.2.2              # BM25 sparse retrieval
-python-dotenv==1.0.0          # Environment management
-pathlib                       # Path handling (built-in)
-dataclasses                   # Data structures (built-in)
-enum34; python_version<"3.4"  # Enum support for older Python
-typing-extensions             # Enhanced typing support
-
-# Optional dependencies for advanced features
-# Uncomment as needed:
-
-# For advanced text preprocessing
-# spacy>=3.7.0                 # Advanced NLP preprocessing
-# nltk>=3.8.1                  # Natural language toolkit
-
-# For cross-encoder reranking
-# sentence-transformers[reranker]>=4.1.0
-
-# For evaluation metrics
-# datasets>=2.14.0             # HuggingFace datasets
-# evaluate>=0.4.0              # Evaluation metrics
-
-# For monitoring and logging
-# wandb>=0.15.0                # Experiment tracking
-# tensorboard>=2.14.0          # TensorBoard logging
-
-# For advanced caching
-# redis>=4.6.0                 # Redis caching backend
-# memcached>=1.4.8             # Memcached support
-
-# For database integration
-# chromadb>=0.4.0              # ChromaDB vector store
-# qdrant-client>=1.6.0         # Qdrant vector store
-# weaviate-client>=3.24.0      # Weaviate vector store
-
-# Development dependencies
-pytest>=7.4.0                 # Testing framework
-pytest-asyncio>=0.21.0        # Async testing
-pytest-cov>=4.1.0             # Coverage reporting
-black>=23.0.0                 # Code formatting
-isort>=5.12.0                 # Import sorting
-flake8>=6.0.0                 # Linting
-mypy>=1.5.0                   # Type checking
-
-# Documentation
-sphinx>=7.1.0                 # Documentation generator
-sphinx-rtd-theme>=1.3.0       # RTD theme
-myst-parser>=2.0.0            # Markdown parser for Sphinx
-
-pandas
-matplotlib
-seaborn

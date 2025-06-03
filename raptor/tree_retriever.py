@@ -426,8 +426,6 @@ class TreeRetriever(BaseRetriever):
             f"Successfully initialized TreeRetriever with Config {config.log_config()}"
         )
 
-
-
     def create_embedding(self, text: str) -> List[float]:
         """Synchronous embedding creation (backward compatibility)"""
         return self.embedding_model.create_embedding(text)
@@ -561,63 +559,6 @@ class TreeRetriever(BaseRetriever):
                 collapse_tree, return_layer_information
             )
     
-
-
-    def retrieve_with_nodes(self, query: str, top_k: int = 10, max_tokens: int = 3500) -> List[Tuple[Node, float]]:
-        """
-        CRITICAL: Retrieve nodes with scores for hybrid system
-        
-        Args:
-            query: Search query
-            top_k: Number of top results  
-            max_tokens: Maximum tokens limit
-            
-        Returns:
-            List[Tuple[Node, float]]: List of (node, similarity_score) tuples
-        """
-        if not isinstance(query, str):
-            raise ValueError("query must be a string")
-        
-        # Get query embedding
-        query_embedding = self.create_embedding(query)
-        
-        # Get all nodes for searching
-        node_list = get_node_list(self.tree.all_nodes)
-        
-        # Calculate similarities
-        embeddings = get_embeddings(node_list, self.context_embedding_model)
-        distances = distances_from_embeddings(query_embedding, embeddings)
-        
-        # Convert distances to similarity scores (1 - distance)
-        similarities = [1 - dist for dist in distances]
-        
-        # Get top k indices
-        indices = indices_of_nearest_neighbors_from_distances(distances)
-        
-        # Filter by token limit and select top results
-        selected_results = []
-        total_tokens = 0
-        
-        for idx in indices[:top_k * 2]:  # Get more candidates initially
-            node = node_list[idx]
-            similarity = similarities[idx]
-            
-            node_tokens = len(self.tokenizer.encode(node.text))
-            
-            if total_tokens + node_tokens <= max_tokens:
-                selected_results.append((node, similarity))
-                total_tokens += node_tokens
-            
-            if len(selected_results) >= top_k:
-                break
-        
-        return selected_results
-
-
-
-
-
-
     def _retrieve_sync(
         self,
         query: str,
