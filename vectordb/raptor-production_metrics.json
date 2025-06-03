@@ -1,0 +1,18 @@
+{
+  "total_time_seconds": 38.54886531829834,
+  "total_documents": 1,
+  "total_chunks": 274,
+  "total_nodes": 284,
+  "layers_built": 1,
+  "memory_peak_mb": 13428.2890625,
+  "cpu_peak_percent": 13.9,
+  "cache_hit_rate": 0.0,
+  "embedding_efficiency": 0.032839513428222625,
+  "throughput_chunks_per_sec": 7.107861612464581,
+  "build_errors": [
+    "Poor retrieval quality for query: What is this document about?",
+    "Poor retrieval quality for query: Summarize the main points",
+    "Poor retrieval quality for query: Key information"
+  ],
+  "timestamp": "2025-06-03T16:41:32.083928"
+}

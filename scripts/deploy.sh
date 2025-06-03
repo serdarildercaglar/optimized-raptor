@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # DOSYA: scripts/deploy.sh
-# AÇIKLAMA: Production deployment script for RAPTOR
+# AÇIKLAMA: Production deployment script for RAPTOR - Fixed Version
 
 set -e
 
@@ -35,6 +35,28 @@ log_error() {
 
 log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
+}
+
+# Detect Docker Compose command (v1 vs v2)
+detect_docker_compose() {
+    if command -v docker-compose &> /dev/null; then
+        DOCKER_COMPOSE_CMD="docker-compose"
+        return 0
+    elif docker compose version &> /dev/null; then
+        DOCKER_COMPOSE_CMD="docker compose"
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Check Docker Compose availability
+check_docker_compose() {
+    if detect_docker_compose; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # Check prerequisites
@@ -85,8 +107,8 @@ check_prerequisites() {
     fi
     
     # Check RAPTOR tree
-    if [ ! -d "vectordb" ] || [ ! -f "vectordb/raptor-optimized" ]; then
-        log_error "RAPTOR tree not found at vectordb/raptor-optimized"
+    if [ ! -d "vectordb" ] || [ ! -f "vectordb/raptor-production" ]; then
+        log_error "RAPTOR tree not found at vectordb/raptor-production"
         log_error "Please build RAPTOR tree first:"
         log_error "  python build-raptor-production.py data.txt"
         exit 1
@@ -355,12 +377,12 @@ build_images() {
     # Clean up old images if requested
     if [ "${CLEAN_BUILD:-false}" = "true" ]; then
         log_info "Cleaning old images..."
-        docker-compose -f $COMPOSE_FILE down --rmi all --remove-orphans || true
+        $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down --rmi all --remove-orphans || true
     fi
     
     # Build images
     log_info "Building images with build target: $BUILD_TARGET"
-    docker-compose -f $COMPOSE_FILE build --no-cache
+    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE build --no-cache
     
     if [ $? -eq 0 ]; then
         log_info "Docker build completed successfully ✅"
@@ -376,11 +398,11 @@ deploy_services() {
     
     # Stop existing services
     log_info "Stopping existing services..."
-    docker-compose -f $COMPOSE_FILE down --remove-orphans || true
+    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down --remove-orphans || true
     
     # Start services
     log_info "Starting services..."
-    docker-compose -f $COMPOSE_FILE up -d
+    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE up -d
     
     if [ $? -eq 0 ]; then
         log_info "Services deployed successfully ✅"
@@ -402,7 +424,7 @@ health_check() {
     
     # Check Redis
     log_info "Checking Redis..."
-    if docker-compose -f $COMPOSE_FILE exec -T redis redis-cli ping | grep -q "PONG"; then
+    if $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE exec -T redis redis-cli ping | grep -q "PONG"; then
         log_info "✅ Redis is healthy"
     else
         log_error "❌ Redis health check failed"
@@ -466,31 +488,31 @@ show_info() {
     echo "   📈 Grafana:        http://localhost:3000 (admin/admin)"
     echo ""
     echo "📋 Useful Commands:"
-    echo "   📜 View logs:       docker-compose -f $COMPOSE_FILE logs -f"
-    echo "   ⏹️  Stop services:   docker-compose -f $COMPOSE_FILE down"
-    echo "   🔄 Restart:         docker-compose -f $COMPOSE_FILE restart"
-    echo "   📊 Service status:  docker-compose -f $COMPOSE_FILE ps"
+    echo "   📜 View logs:       $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE logs -f"
+    echo "   ⏹️  Stop services:   $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down"
+    echo "   🔄 Restart:         $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE restart"
+    echo "   📊 Service status:  $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE ps"
     echo ""
     echo "🧪 Quick Test:"
     echo "   curl http://localhost:8000/health"
     echo ""
     echo "📁 Log Locations:"
     echo "   📜 App logs:        ./logs/"
-    echo "   🐳 Container logs:  docker-compose -f $COMPOSE_FILE logs"
+    echo "   🐳 Container logs:  $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE logs"
     echo ""
 }
 
 # Rollback function
 rollback() {
     log_warn "Rolling back deployment..."
-    docker-compose -f $COMPOSE_FILE down --remove-orphans
+    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down --remove-orphans
     log_info "Rollback completed"
 }
 
 # Cleanup function
 cleanup() {
     log_info "Cleaning up..."
-    docker-compose -f $COMPOSE_FILE down --volumes --remove-orphans
+    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down --volumes --remove-orphans
     docker system prune -f
     log_info "Cleanup completed"
 }
