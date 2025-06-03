@@ -16,7 +16,8 @@ from dataclasses import dataclass
 import json
 import signal
 from contextlib import contextmanager
-
+from dotenv import load_dotenv
+load_dotenv()
 # Import our configuration
 from production_config import get_production_config, Environment
 from monitoring_setup import setup_monitoring
