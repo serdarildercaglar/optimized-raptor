@@ -26,7 +26,7 @@ RA_config = RetrievalAugmentationConfig(
 )
 
 # Önceden oluşturulmuş RAPTOR tree'sini yükle
-PATH = "vectordb/raptor-optimized"
+PATH = "vectordb/raptor-production"
 RA = RetrievalAugmentation(tree=PATH, config=RA_config)
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
