@@ -38,7 +38,188 @@ from openai import AsyncOpenAI
 import asyncio
 
 app = FastAPI(title="Generic QA Server", description="RAPTOR-powered Question Answering System")
+# Health check endpoint'inin enhanced versiyonu için gerekli ek kod
 
+import asyncio
+import time
+import logging
+from typing import Dict, Any
+
+# Global model loading state tracker
+MODEL_LOADING_STATE = {
+    'models_loaded': False,
+    'loading_start_time': time.time(),
+    'loading_errors': [],
+    'loaded_models': [],
+    'embedding_model_ready': False,
+    'raptor_tree_ready': False
+}
+
+async def check_model_loading_status() -> Dict[str, Any]:
+    """Model yükleme durumunu kontrol eder"""
+    global MODEL_LOADING_STATE
+    
+    try:
+        # RAPTOR embedding model'ini kontrol et
+        if hasattr(RA, 'tree') and RA.tree:
+            MODEL_LOADING_STATE['raptor_tree_ready'] = True
+            if 'raptor_tree' not in MODEL_LOADING_STATE['loaded_models']:
+                MODEL_LOADING_STATE['loaded_models'].append('raptor_tree')
+        
+        # Embedding model'ini kontrol et
+        if hasattr(RA, 'tree_retriever') and RA.tree_retriever:
+            try:
+                # Test embedding creation
+                test_embedding = await asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    lambda: RA.tree_retriever.create_embedding("test")
+                )
+                if test_embedding and len(test_embedding) > 0:
+                    MODEL_LOADING_STATE['embedding_model_ready'] = True
+                    if 'embedding_model' not in MODEL_LOADING_STATE['loaded_models']:
+                        MODEL_LOADING_STATE['loaded_models'].append('embedding_model')
+            except Exception as e:
+                if str(e) not in MODEL_LOADING_STATE['loading_errors']:
+                    MODEL_LOADING_STATE['loading_errors'].append(str(e))
+        
+        # OpenAI client'ı kontrol et
+        try:
+            # Basit bir test call (bu genelde hızlıdır)
+            test_response = await openai_client.models.list()
+            if 'openai_client' not in MODEL_LOADING_STATE['loaded_models']:
+                MODEL_LOADING_STATE['loaded_models'].append('openai_client')
+        except Exception as e:
+            if str(e) not in MODEL_LOADING_STATE['loading_errors']:
+                MODEL_LOADING_STATE['loading_errors'].append(str(e))
+        
+        # Overall model loading status
+        required_models = ['raptor_tree', 'embedding_model', 'openai_client']
+        loaded_required = [m for m in required_models if m in MODEL_LOADING_STATE['loaded_models']]
+        
+        MODEL_LOADING_STATE['models_loaded'] = len(loaded_required) >= 2  # En az 2 model yüklü olsun
+        
+        return MODEL_LOADING_STATE
+        
+    except Exception as e:
+        MODEL_LOADING_STATE['loading_errors'].append(str(e))
+        return MODEL_LOADING_STATE
+
+# Enhanced health check endpoint
+@app.get("/health")
+async def enhanced_health_check():
+    """Enhanced sistem sağlık kontrolü with model loading status"""
+    start_time = time.time()
+    
+    try:
+        # Redis bağlantısını test et
+        await redis_client.ping()
+        redis_status = "healthy"
+        redis_latency = (time.time() - start_time) * 1000
+    except Exception as e:
+        redis_status = "unhealthy"
+        redis_latency = None
+    
+    # RAPTOR durumunu kontrol et
+    raptor_status = "healthy" if RA and RA.tree else "unhealthy"
+    
+    # Model loading durumunu kontrol et
+    model_status = await check_model_loading_status()
+    
+    # WebSocket connection sayısı
+    active_connections = len(manager.active_connections)
+    
+    # System resources (optional)
+    system_info = {}
+    try:
+        import psutil
+        memory = psutil.virtual_memory()
+        system_info = {
+            'memory_usage_percent': round(memory.percent, 1),
+            'memory_available_gb': round(memory.available / (1024**3), 2),
+            'cpu_usage_percent': round(psutil.cpu_percent(interval=0.1), 1)
+        }
+    except ImportError:
+        pass
+    
+    # GPU info (optional)
+    gpu_info = {}
+    try:
+        import subprocess
+        gpu_output = subprocess.check_output(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total', '--format=csv,noheader,nounits'], 
+                                           stderr=subprocess.DEVNULL, timeout=5).decode()
+        gpu_lines = gpu_output.strip().split('\n')
+        if gpu_lines and gpu_lines[0]:
+            util, mem_used, mem_total = gpu_lines[0].split(', ')
+            gpu_info = {
+                'gpu_utilization_percent': int(util),
+                'gpu_memory_used_mb': int(mem_used),
+                'gpu_memory_total_mb': int(mem_total),
+                'gpu_memory_usage_percent': round((int(mem_used) / int(mem_total)) * 100, 1)
+            }
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+        pass
+    
+    # Overall status
+    overall_healthy = (
+        redis_status == "healthy" and 
+        raptor_status == "healthy" and 
+        model_status['models_loaded']
+    )
+    
+    response = {
+        "status": "healthy" if overall_healthy else "degraded" if model_status['models_loaded'] else "unhealthy",
+        "timestamp": time.time(),
+        "services": {
+            "redis": redis_status,
+            "raptor": raptor_status,
+        },
+        "models": {
+            "models_loaded": model_status['models_loaded'],
+            "loaded_models": model_status['loaded_models'],
+            "loading_time_seconds": round(time.time() - model_status['loading_start_time'], 1),
+            "loading_errors": model_status['loading_errors'][-3:] if model_status['loading_errors'] else []  # Son 3 hata
+        },
+        "performance": {
+            "active_connections": active_connections,
+            "redis_latency_ms": round(redis_latency, 2) if redis_latency else None,
+            "response_time_ms": round((time.time() - start_time) * 1000, 2)
+        }
+    }
+    
+    # Optional system info ekleme
+    if system_info:
+        response["system"] = system_info
+    
+    if gpu_info:
+        response["gpu"] = gpu_info
+    
+    return response
+
+# Model loading monitoring endpoint (additional)
+@app.get("/models/status")
+async def model_loading_status():
+    """Sadece model yükleme durumunu döndürür"""
+    return await check_model_loading_status()
+
+# Startup event'i için model loading tracker
+@app.on_event("startup")
+async def startup_event():
+    """Uygulama başlangıcında model loading tracking'i başlat"""
+    global MODEL_LOADING_STATE
+    MODEL_LOADING_STATE['loading_start_time'] = time.time()
+    
+    # Background task olarak model status check'i çalıştır
+    asyncio.create_task(periodic_model_check())
+
+async def periodic_model_check():
+    """Periyodik olarak model durumunu kontrol et"""
+    while True:
+        try:
+            await check_model_loading_status()
+            await asyncio.sleep(30)  # Her 30 saniyede bir kontrol et
+        except Exception as e:
+            logging.error(f"Periodic model check error: {e}")
+            await asyncio.sleep(60)  # Hata durumunda 60 saniye bekle
 # Redis yapılandırması
 redis_client = redis.Redis(
     host='localhost', 

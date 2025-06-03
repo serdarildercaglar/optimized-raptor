@@ -20,23 +20,22 @@ services:
   raptor-app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.cpu
+      args:
+        - CPU_ONLY=true
     container_name: raptor-app
     restart: unless-stopped
     ports:
       - "8000:8000"
-    # GPU support - Docker Compose v2 format (conditional)
+    # CPU-only resource limits
     deploy:
       resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-        # Fallback limits for CPU-only systems
         limits:
           memory: 8G
           cpus: '4'
+        reservations:
+          memory: 4G
+          cpus: '2'
     environment:
       - RAPTOR_ENV=production
       - REDIS_HOST=redis
@@ -45,25 +44,25 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8000
-      # GPU settings (will be ignored if no GPU)
-      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
-      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+      # CPU-only mode
+      - FORCE_CPU_MODE=true
+      - CUDA_VISIBLE_DEVICES=""
+      - NVIDIA_VISIBLE_DEVICES=""
       # HuggingFace cache ayarları
       - HF_HOME=/app/.cache/huggingface
       - TRANSFORMERS_CACHE=/app/.cache/huggingface/hub
       - HF_DATASETS_CACHE=/app/.cache/huggingface/datasets
       - HF_HUB_DISABLE_SYMLINKS_WARNING=1
-      - TORCH_CUDA_ARCH_LIST="6.1;7.0;7.5;8.0;8.6+PTX"
-      # Model loading optimizations
+      # CPU optimizations
       - TOKENIZERS_PARALLELISM=false
-      - OMP_NUM_THREADS=1
-      # CPU fallback settings
-      - FORCE_CPU_MODE=${FORCE_CPU_MODE:-false}
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+      - OPENBLAS_NUM_THREADS=4
     volumes:
       - ./vectordb:/app/vectordb:ro
       - ./logs:/app/logs
       - ./config:/app/config:ro
-      # Dinamik HuggingFace cache mount
+      # HuggingFace cache mount
       - ${HOME}/.cache/huggingface:/app/.cache/huggingface
       # Local cache directories
       - ./embedding_cache:/app/embedding_cache
@@ -74,42 +73,38 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      # Multi-stage healthcheck
       test: |
         python -c "
         import requests, time, os
         
-        # Basic health check
         try:
             response = requests.get('http://localhost:8000/health', timeout=30)
             if response.status_code != 200:
                 exit(1)
             
-            # Check if models are loaded (advanced check)
             health_data = response.json()
             if health_data.get('models', {}).get('models_loaded', False):
-                print('✅ Models loaded successfully')
+                print('✅ Models loaded successfully (CPU mode)')
                 exit(0)
             else:
-                print('⏳ Models still loading...')
+                print('⏳ Models still loading... (CPU mode - slower)')
                 exit(1)
                 
         except Exception as e:
             print(f'❌ Health check failed: {e}')
             exit(1)
         "
-      interval: 60s      # Daha uzun interval
-      timeout: 30s       # Daha uzun timeout
-      retries: 10        # Daha fazla retry
-      start_period: 600s # 10 dakika başlangıç süresi
+      interval: 90s      # CPU'da daha uzun interval
+      timeout: 45s       # CPU'da daha uzun timeout
+      retries: 15        # CPU'da daha fazla retry
+      start_period: 900s # CPU'da 15 dakika başlangıç
     networks:
       - raptor-network
-    # GPU için shared memory ve limits
-    shm_size: 4gb
+    # CPU için optimize edilmiş shared memory
+    shm_size: 2gb
     ulimits:
       memlock: -1
       stack: 67108864
-    # Init için
     init: true
 
   prometheus:
@@ -148,7 +143,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
-  model_cache:  # Yeni model cache volume
+  model_cache:
 
 networks:
   raptor-network:
