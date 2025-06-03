@@ -48,12 +48,14 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null; then
+    # Check Docker Compose (updated)
+    if ! check_docker_compose; then
         log_error "Docker Compose is required but not installed"
         echo "Install Docker Compose: https://docs.docker.com/compose/install/"
         exit 1
     fi
+    
+    log_info "Using Docker Compose command: $DOCKER_COMPOSE_CMD"
     
     # Check if Docker is running
     if ! docker info &> /dev/null; then
