@@ -23,7 +23,7 @@ load_dotenv(find_dotenv())
 
 # RAPTOR imports
 from raptor import RetrievalAugmentation, RetrievalAugmentationConfig
-from raptor import GPT4OSummarizationModel
+from raptor import GPT41SummarizationModel
 from raptor.EmbeddingModels import CustomEmbeddingModel
 
 # Logging setup
