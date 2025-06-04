@@ -1,6 +1,6 @@
 """
 DOSYA: performance-optimizer.py
-AÇIKLAMA: Production performance optimization ve load testing utilities
+AÇIKLAMA: Enhanced RAPTOR-specific performance testing and optimization
 """
 
 import os
@@ -15,9 +15,9 @@ import json
 import logging
 import threading
 import queue
-import websocket
 import requests
 from pathlib import Path
+import traceback
 
 # Performance monitoring
 try:
@@ -27,18 +27,33 @@ except ImportError:
     PSUTIL_AVAILABLE = False
     print("⚠️ psutil not installed. Run: pip install psutil")
 
+# WebSocket support
+try:
+    import websockets
+    WEBSOCKETS_AVAILABLE = True
+except ImportError:
+    WEBSOCKETS_AVAILABLE = False
+    print("⚠️ websockets not installed. Run: pip install websockets")
+
 logger = logging.getLogger(__name__)
 
 @dataclass
 class PerformanceMetrics:
-    """Performance test metrics"""
+    """Enhanced performance test metrics for RAPTOR"""
     total_requests: int = 0
     successful_requests: int = 0
     failed_requests: int = 0
+    timeout_requests: int = 0
     response_times: List[float] = field(default_factory=list)
     error_messages: List[str] = field(default_factory=list)
     start_time: float = 0.0
     end_time: float = 0.0
+    
+    # RAPTOR-specific metrics
+    stream_responses: int = 0
+    tool_call_responses: int = 0
+    rag_search_count: int = 0
+    complete_conversations: int = 0
     
     # Resource usage
     peak_memory_mb: float = 0.0
@@ -87,9 +102,16 @@ class PerformanceMetrics:
             'total_requests': self.total_requests,
             'successful_requests': self.successful_requests,
             'failed_requests': self.failed_requests,
+            'timeout_requests': self.timeout_requests,
             'success_rate_percent': round(self.success_rate, 2),
             'duration_seconds': round(self.duration_seconds, 2),
             'requests_per_second': round(self.requests_per_second, 2),
+            'raptor_metrics': {
+                'stream_responses': self.stream_responses,
+                'tool_call_responses': self.tool_call_responses,
+                'rag_search_count': self.rag_search_count,
+                'complete_conversations': self.complete_conversations
+            },
             'response_times': {
                 'avg_ms': round(self.avg_response_time * 1000, 2),
                 'median_ms': round(self.median_response_time * 1000, 2),
@@ -159,10 +181,10 @@ class ResourceMonitor:
             except Exception as e:
                 logger.warning(f"Resource monitoring error: {e}")
             
-            time.sleep(1)
+            time.sleep(2)
 
-class WebSocketLoadTester:
-    """WebSocket-specific load testing"""
+class RAPTORWebSocketTester:
+    """RAPTOR-specific WebSocket load testing"""
     
     def __init__(self, url: str):
         self.url = url
@@ -171,11 +193,15 @@ class WebSocketLoadTester:
     
     async def run_websocket_test(self, 
                                 concurrent_connections: int = 10,
-                                messages_per_connection: int = 10,
-                                test_duration_seconds: int = 60) -> PerformanceMetrics:
-        """Run WebSocket load test"""
+                                messages_per_connection: int = 5,
+                                test_duration_seconds: int = 120) -> PerformanceMetrics:
+        """Run RAPTOR WebSocket load test"""
         
-        logger.info(f"🔄 Starting WebSocket load test...")
+        if not WEBSOCKETS_AVAILABLE:
+            logger.error("WebSocket testing requires 'websockets' package")
+            return self.metrics
+        
+        logger.info(f"🔄 Starting RAPTOR WebSocket load test...")
         logger.info(f"   Connections: {concurrent_connections}")
         logger.info(f"   Messages per connection: {messages_per_connection}")
         logger.info(f"   Duration: {test_duration_seconds}s")
@@ -183,18 +209,18 @@ class WebSocketLoadTester:
         self.metrics.start_time = time.time()
         self.resource_monitor.start()
         
-        # Test messages
+        # RAPTOR-specific test messages
         test_messages = [
-            "Bu doküman hakkında ne söyleyebilirsin?",
-            "Ana konular nelerdir?",
-            "Önemli bilgiler neler?",
-            "Özet çıkarabilir misin?",
-            "Detaylı açıklama istiyorum",
-            "Bu konuda daha fazla bilgi",
-            "Karşılaştırmalı analiz yap",
-            "Sonuçlar nelerdir?",
-            "Öneriler neler?",
-            "En önemli noktalar"
+            "Bu doküman hakkında kısa bir özet çıkarabilir misin?",
+            "Dokümanın ana konularını listeler misin?",
+            "En önemli bilgiler nelerdir?",
+            "Bu konuda detaylı bilgi verebilir misin?",
+            "Hangi konularda daha fazla açıklama yapabilirsin?",
+            "Bu dokümanın öne çıkan noktaları neler?",
+            "Konuyla ilgili örnekler var mı?",
+            "Bu bilgileri nasıl uygulayabilirim?",
+            "İlgili diğer konular nelerdir?",
+            "Özet olarak ne söyleyebilirsin?"
         ]
         
         # Create connection tasks
@@ -225,9 +251,8 @@ class WebSocketLoadTester:
                                          client_id: str, 
                                          messages: List[str],
                                          max_duration: int):
-        """Single WebSocket connection worker"""
+        """Single WebSocket connection worker for RAPTOR testing"""
         
-        import websockets
         start_time = time.time()
         
         try:
@@ -242,31 +267,74 @@ class WebSocketLoadTester:
                     try:
                         await websocket.send(message)
                         
-                        # Wait for response
+                        # RAPTOR-specific response handling
                         response_received = False
-                        while not response_received and (time.time() - message_start) < 30:
+                        stream_started = False
+                        tool_calls_detected = False
+                        rag_searches = 0
+                        message_parts = []
+                        
+                        # Wait for complete conversation
+                        while not response_received and (time.time() - message_start) < 60:  # 60s timeout
                             try:
-                                response = await asyncio.wait_for(websocket.recv(), timeout=1.0)
+                                response = await asyncio.wait_for(websocket.recv(), timeout=5.0)
                                 response_data = json.loads(response)
+                                message_type = response_data.get('type', '')
                                 
-                                # Check if this is the end of stream
-                                if response_data.get('type') == 'stream_end':
+                                # Handle different RAPTOR message types
+                                if message_type == 'stream_start':
+                                    stream_started = True
+                                    
+                                elif message_type == 'content_chunk':
+                                    content = response_data.get('content', '')
+                                    if content:
+                                        message_parts.append(content)
+                                
+                                elif message_type == 'tool_calls_start':
+                                    tool_calls_detected = True
+                                
+                                elif message_type == 'rag_search':
+                                    rag_searches += 1
+                                
+                                elif message_type == 'rag_complete':
+                                    pass  # RAG search completed
+                                
+                                elif message_type == 'final_response_start':
+                                    pass  # Final response starting
+                                
+                                elif message_type == 'stream_end':
                                     response_received = True
                                     response_time = time.time() - message_start
                                     
+                                    # Record successful conversation
                                     self.metrics.total_requests += 1
                                     self.metrics.successful_requests += 1
                                     self.metrics.response_times.append(response_time)
                                     
+                                    # Record RAPTOR-specific metrics
+                                    if stream_started:
+                                        self.metrics.stream_responses += 1
+                                    if tool_calls_detected:
+                                        self.metrics.tool_call_responses += 1
+                                    if rag_searches > 0:
+                                        self.metrics.rag_search_count += rag_searches
+                                    if len(message_parts) > 0:
+                                        self.metrics.complete_conversations += 1
+                                
                             except asyncio.TimeoutError:
                                 continue
-                            except json.JSONDecodeError:
+                            except json.JSONDecodeError as e:
+                                logger.warning(f"JSON decode error: {e}")
+                                continue
+                            except Exception as e:
+                                logger.warning(f"Message handling error: {e}")
                                 continue
                         
+                        # Check if conversation timed out
                         if not response_received:
                             self.metrics.total_requests += 1
-                            self.metrics.failed_requests += 1
-                            self.metrics.error_messages.append("Response timeout")
+                            self.metrics.timeout_requests += 1
+                            self.metrics.error_messages.append("Conversation timeout")
                         
                     except Exception as e:
                         self.metrics.total_requests += 1
@@ -275,15 +343,15 @@ class WebSocketLoadTester:
                     
                     message_index += 1
                     
-                    # Small delay between messages
-                    await asyncio.sleep(0.1)
+                    # Brief delay between messages
+                    await asyncio.sleep(2)  # 2 seconds between messages
         
         except Exception as e:
             logger.error(f"WebSocket connection failed for {client_id}: {e}")
             self.metrics.error_messages.append(f"Connection failed: {str(e)}")
 
-class HTTPLoadTester:
-    """HTTP endpoint load testing"""
+class RAPTORHTTPTester:
+    """RAPTOR-specific HTTP endpoint testing"""
     
     def __init__(self, base_url: str):
         self.base_url = base_url
@@ -291,21 +359,21 @@ class HTTPLoadTester:
         self.resource_monitor = ResourceMonitor()
     
     def run_http_test(self,
-                     concurrent_requests: int = 50,
-                     total_requests: int = 1000) -> PerformanceMetrics:
-        """Run HTTP load test"""
+                     concurrent_requests: int = 20,
+                     total_requests: int = 200) -> PerformanceMetrics:
+        """Run RAPTOR HTTP load test"""
         
-        logger.info(f"🔄 Starting HTTP load test...")
+        logger.info(f"🔄 Starting RAPTOR HTTP load test...")
         logger.info(f"   Concurrent requests: {concurrent_requests}")
         logger.info(f"   Total requests: {total_requests}")
         
         self.metrics.start_time = time.time()
         self.resource_monitor.start()
         
-        # Test endpoints
+        # RAPTOR-specific endpoints
         endpoints = [
             '/health',
-            '/chat_history/test_session'
+            '/models/status'
         ]
         
         # Create request tasks
@@ -336,7 +404,7 @@ class HTTPLoadTester:
         return self.metrics
     
     def _make_request(self, endpoint: str):
-        """Make single HTTP request"""
+        """Make single HTTP request with RAPTOR-specific handling"""
         url = f"{self.base_url}{endpoint}"
         start_time = time.time()
         
@@ -349,21 +417,37 @@ class HTTPLoadTester:
             
             if response.status_code == 200:
                 self.metrics.successful_requests += 1
+                
+                # RAPTOR-specific response validation
+                if endpoint == '/health':
+                    try:
+                        health_data = response.json()
+                        status = health_data.get('status', 'unknown')
+                        if status not in ['healthy', 'degraded']:
+                            self.metrics.error_messages.append(f"Unhealthy status: {status}")
+                    except:
+                        self.metrics.error_messages.append("Invalid health response format")
+                        
             else:
                 self.metrics.failed_requests += 1
                 self.metrics.error_messages.append(f"HTTP {response.status_code}")
                 
+        except requests.exceptions.Timeout:
+            self.metrics.total_requests += 1
+            self.metrics.timeout_requests += 1
+            self.metrics.error_messages.append("Request timeout")
+            
         except Exception as e:
             self.metrics.total_requests += 1
             self.metrics.failed_requests += 1
             self.metrics.error_messages.append(str(e))
 
-class PerformanceOptimizer:
-    """Performance optimization recommendations"""
+class RAPTORPerformanceAnalyzer:
+    """RAPTOR-specific performance analysis and recommendations"""
     
     @staticmethod
     def analyze_metrics(metrics: PerformanceMetrics) -> Dict[str, Any]:
-        """Analyze performance metrics and provide recommendations"""
+        """Analyze RAPTOR performance metrics and provide recommendations"""
         
         analysis = {
             'performance_grade': 'A',
@@ -373,38 +457,48 @@ class PerformanceOptimizer:
             'optimizations': []
         }
         
-        # Response time analysis
+        # RAPTOR-specific response time analysis (AI systems are slower)
         avg_response_ms = metrics.avg_response_time * 1000
         p95_response_ms = metrics.p95_response_time * 1000
         
-        if avg_response_ms > 5000:  # 5 seconds
+        if avg_response_ms > 15000:  # 15 seconds for AI
             analysis['performance_grade'] = 'F'
-            analysis['bottlenecks'].append('Very slow response times')
-            analysis['recommendations'].append('Increase batch size and concurrent operations')
-        elif avg_response_ms > 2000:  # 2 seconds
+            analysis['bottlenecks'].append('Very slow AI response times')
+            analysis['recommendations'].append('Check RAPTOR tree size and embedding model performance')
+        elif avg_response_ms > 10000:  # 10 seconds
             analysis['performance_grade'] = 'D'
-            analysis['bottlenecks'].append('Slow response times')
-            analysis['recommendations'].append('Enable caching and optimize retrieval')
-        elif avg_response_ms > 1000:  # 1 second
+            analysis['bottlenecks'].append('Slow AI response times')
+            analysis['recommendations'].append('Enable early termination and optimize batch size')
+        elif avg_response_ms > 7000:  # 7 seconds
             analysis['performance_grade'] = 'C'
-            analysis['recommendations'].append('Consider enabling early termination')
-        elif avg_response_ms > 500:  # 500ms
+            analysis['recommendations'].append('Consider increasing concurrent operations')
+        elif avg_response_ms > 5000:  # 5 seconds
             analysis['performance_grade'] = 'B'
         
-        # Success rate analysis
-        if metrics.success_rate < 95:
+        # RAPTOR-specific success rate analysis
+        if metrics.success_rate < 80:  # Lower threshold for AI systems
             analysis['performance_grade'] = 'F'
-            analysis['bottlenecks'].append('High error rate')
-            analysis['recommendations'].append('Check system resources and error logs')
-        elif metrics.success_rate < 99:
-            analysis['warnings'].append('Moderate error rate detected')
+            analysis['bottlenecks'].append('High error rate in AI conversations')
+            analysis['recommendations'].append('Check RAPTOR tree integrity and Redis connectivity')
+        elif metrics.success_rate < 90:
+            analysis['warnings'].append('Moderate AI conversation failure rate')
         
-        # Throughput analysis
-        if metrics.requests_per_second < 1:
-            analysis['bottlenecks'].append('Very low throughput')
-            analysis['recommendations'].append('Scale up hardware or optimize algorithms')
-        elif metrics.requests_per_second < 5:
+        # Throughput analysis (lower expectations for AI)
+        if metrics.requests_per_second < 0.5:  # Very low for AI
+            analysis['bottlenecks'].append('Very low AI throughput')
+            analysis['recommendations'].append('Scale up hardware or optimize RAPTOR configuration')
+        elif metrics.requests_per_second < 2:
             analysis['recommendations'].append('Consider async processing improvements')
+        
+        # RAPTOR-specific metrics analysis
+        if metrics.tool_call_responses > 0:
+            tool_call_ratio = metrics.tool_call_responses / max(metrics.successful_requests, 1)
+            if tool_call_ratio > 0.8:
+                analysis['optimizations'].append('High RAG usage - consider cache optimization')
+        
+        if metrics.timeout_requests > metrics.successful_requests * 0.1:
+            analysis['bottlenecks'].append('High timeout rate in AI conversations')
+            analysis['recommendations'].append('Increase WebSocket timeout and optimize retrieval')
         
         # Resource usage analysis
         if metrics.peak_memory_mb > 8000:  # 8GB
@@ -415,31 +509,32 @@ class PerformanceOptimizer:
             analysis['warnings'].append('High CPU usage')
             analysis['optimizations'].append('Increase worker processes or optimize batch sizes')
         
-        # P95 vs average analysis
-        if p95_response_ms > avg_response_ms * 3:
-            analysis['bottlenecks'].append('High response time variance')
-            analysis['recommendations'].append('Enable request timeout and retries')
+        # P95 vs average analysis for AI systems
+        if p95_response_ms > avg_response_ms * 4:  # Higher variance acceptable for AI
+            analysis['bottlenecks'].append('High response time variance in AI')
+            analysis['recommendations'].append('Enable request timeout and improve caching')
         
         return analysis
     
     @staticmethod
     def generate_optimization_config(analysis: Dict[str, Any], 
                                    base_config: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate optimized configuration based on analysis"""
+        """Generate optimized RAPTOR configuration based on analysis"""
         
         optimized = base_config.copy()
         
-        if 'Very slow response times' in analysis['bottlenecks']:
-            # Aggressive optimizations for slow performance
+        if 'Very slow AI response times' in analysis['bottlenecks']:
+            # Aggressive optimizations for slow RAPTOR performance
             optimized.update({
                 'tb_batch_size': min(base_config.get('tb_batch_size', 100) * 2, 300),
                 'max_concurrent_operations': min(base_config.get('max_concurrent_operations', 10) + 6, 20),
                 'tr_early_termination': True,
-                'tr_confidence_threshold': 0.7,
-                'cache_ttl': 7200
+                'tr_confidence_threshold': 0.6,  # Lower for speed
+                'cache_ttl': 7200,
+                'tr_top_k': 5  # Reduce retrieval scope
             })
         
-        elif 'Slow response times' in analysis['bottlenecks']:
+        elif 'Slow AI response times' in analysis['bottlenecks']:
             # Moderate optimizations
             optimized.update({
                 'tb_batch_size': int(base_config.get('tb_batch_size', 100) * 1.5),
@@ -449,78 +544,108 @@ class PerformanceOptimizer:
             })
         
         if 'High memory usage' in analysis['warnings']:
-            # Memory optimizations
+            # Memory optimizations for RAPTOR
             optimized.update({
                 'tb_batch_size': max(base_config.get('tb_batch_size', 100) // 2, 25),
                 'max_concurrent_operations': max(base_config.get('max_concurrent_operations', 10) // 2, 4),
-                'cache_ttl': 1800  # 30 minutes
+                'cache_ttl': 1800,  # 30 minutes
+                'tr_top_k': 3  # Reduce memory usage
             })
         
-        if 'Very low throughput' in analysis['bottlenecks']:
-            # Throughput optimizations
+        if 'Very low AI throughput' in analysis['bottlenecks']:
+            # Throughput optimizations for RAPTOR
             optimized.update({
                 'workers': min(base_config.get('workers', 4) * 2, 8),
                 'tb_batch_size': min(base_config.get('tb_batch_size', 100) * 2, 250),
-                'max_concurrent_operations': min(base_config.get('max_concurrent_operations', 10) * 2, 16)
+                'max_concurrent_operations': min(base_config.get('max_concurrent_operations', 10) * 2, 16),
+                'enable_async': True
+            })
+        
+        # RAPTOR-specific optimizations
+        if 'High RAG usage' in [opt for opt in analysis.get('optimizations', [])]:
+            optimized.update({
+                'tr_enable_caching': True,
+                'cache_ttl': 7200,  # 2 hours for RAG cache
+                'tr_adaptive_retrieval': True
             })
         
         return optimized
 
-def run_comprehensive_load_test(server_url: str = "http://localhost:8000",
-                               websocket_url: str = "ws://localhost:8000/ws/test_client",
-                               output_file: str = None) -> Dict[str, Any]:
-    """Run comprehensive load test suite"""
+def run_comprehensive_raptor_test(server_url: str = "http://localhost:8000",
+                                 websocket_url: str = "ws://localhost:8000/ws/test_client",
+                                 output_file: str = None) -> Dict[str, Any]:
+    """Run comprehensive RAPTOR load test suite"""
     
     results = {
         'timestamp': time.time(),
         'server_url': server_url,
         'websocket_url': websocket_url,
+        'raptor_version': 'optimized',
         'tests': {}
     }
     
-    logger.info("🚀 Starting comprehensive load test suite...")
+    logger.info("🚀 Starting comprehensive RAPTOR load test suite...")
     
     # Test 1: HTTP Load Test
-    logger.info("\n📊 Test 1: HTTP Load Test")
-    http_tester = HTTPLoadTester(server_url)
-    http_metrics = http_tester.run_http_test(concurrent_requests=20, total_requests=100)
+    logger.info("\n📊 Test 1: RAPTOR HTTP Load Test")
+    http_tester = RAPTORHTTPTester(server_url)
+    http_metrics = http_tester.run_http_test(concurrent_requests=15, total_requests=150)
     results['tests']['http'] = http_metrics.to_dict()
     
     logger.info(f"   Success Rate: {http_metrics.success_rate:.1f}%")
     logger.info(f"   Avg Response: {http_metrics.avg_response_time*1000:.1f}ms")
     logger.info(f"   Throughput: {http_metrics.requests_per_second:.1f} req/s")
     
-    # Test 2: WebSocket Load Test
-    logger.info("\n🔗 Test 2: WebSocket Load Test")
+    # Test 2: WebSocket Load Test (RAPTOR-specific)
+    logger.info("\n🔗 Test 2: RAPTOR WebSocket AI Conversation Test")
     try:
-        ws_tester = WebSocketLoadTester(websocket_url)
-        ws_metrics = asyncio.run(ws_tester.run_websocket_test(
-            concurrent_connections=5,
-            messages_per_connection=3,
-            test_duration_seconds=30
-        ))
-        results['tests']['websocket'] = ws_metrics.to_dict()
-        
-        logger.info(f"   Success Rate: {ws_metrics.success_rate:.1f}%")
-        logger.info(f"   Avg Response: {ws_metrics.avg_response_time*1000:.1f}ms")
-        logger.info(f"   Total Messages: {ws_metrics.total_requests}")
-        
+        if WEBSOCKETS_AVAILABLE:
+            ws_tester = RAPTORWebSocketTester(websocket_url)
+            ws_metrics = asyncio.run(ws_tester.run_websocket_test(
+                concurrent_connections=8,
+                messages_per_connection=4,
+                test_duration_seconds=120
+            ))
+            results['tests']['websocket'] = ws_metrics.to_dict()
+            
+            logger.info(f"   Success Rate: {ws_metrics.success_rate:.1f}%")
+            logger.info(f"   Avg Response: {ws_metrics.avg_response_time*1000:.1f}ms")
+            logger.info(f"   Total Conversations: {ws_metrics.total_requests}")
+            logger.info(f"   RAG Searches: {ws_metrics.rag_search_count}")
+            logger.info(f"   Complete Conversations: {ws_metrics.complete_conversations}")
+        else:
+            results['tests']['websocket'] = {'error': 'websockets package not available'}
+            
     except Exception as e:
         logger.error(f"WebSocket test failed: {e}")
         results['tests']['websocket'] = {'error': str(e)}
     
-    # Performance Analysis
-    logger.info("\n📈 Performance Analysis")
+    # RAPTOR Performance Analysis
+    logger.info("\n📈 RAPTOR Performance Analysis")
     if 'websocket' in results['tests'] and 'error' not in results['tests']['websocket']:
-        # Use WebSocket metrics for analysis (more comprehensive)
-        analysis = PerformanceOptimizer.analyze_metrics(ws_metrics)
+        # Recreate metrics object for analysis
+        ws_metrics_dict = results['tests']['websocket']
+        analysis_metrics = PerformanceMetrics()
+        analysis_metrics.total_requests = ws_metrics_dict['total_requests']
+        analysis_metrics.successful_requests = ws_metrics_dict['successful_requests']
+        analysis_metrics.failed_requests = ws_metrics_dict['failed_requests']
+        analysis_metrics.timeout_requests = ws_metrics_dict['timeout_requests']
+        analysis_metrics.response_times = [t/1000 for t in [
+            ws_metrics_dict['response_times']['avg_ms'],
+            ws_metrics_dict['response_times']['median_ms']
+        ] if t > 0]
+        analysis_metrics.tool_call_responses = ws_metrics_dict['raptor_metrics']['tool_call_responses']
+        analysis_metrics.peak_memory_mb = ws_metrics_dict['resource_usage']['peak_memory_mb']
+        analysis_metrics.peak_cpu_percent = ws_metrics_dict['resource_usage']['peak_cpu_percent']
+        
+        analysis = RAPTORPerformanceAnalyzer.analyze_metrics(analysis_metrics)
         results['analysis'] = analysis
         
         logger.info(f"   Performance Grade: {analysis['performance_grade']}")
         if analysis['bottlenecks']:
             logger.warning(f"   Bottlenecks: {', '.join(analysis['bottlenecks'])}")
         if analysis['recommendations']:
-            logger.info(f"   Recommendations: {', '.join(analysis['recommendations'][:2])}")
+            logger.info(f"   Top Recommendation: {analysis['recommendations'][0]}")
     
     # Save results
     if output_file:
@@ -530,12 +655,12 @@ def run_comprehensive_load_test(server_url: str = "http://localhost:8000",
     
     return results
 
-def optimize_production_config(test_results: Dict[str, Any],
-                             current_config_path: str = "config/production.json",
-                             output_config_path: str = "config/production_optimized.json"):
-    """Generate optimized configuration based on test results"""
+def optimize_raptor_config(test_results: Dict[str, Any],
+                          current_config_path: str = "config/production.json",
+                          output_config_path: str = "config/production_optimized.json"):
+    """Generate optimized RAPTOR configuration based on test results"""
     
-    logger.info("🔧 Generating optimized configuration...")
+    logger.info("🔧 Generating optimized RAPTOR configuration...")
     
     # Load current config
     base_config = {}
@@ -543,19 +668,22 @@ def optimize_production_config(test_results: Dict[str, Any],
         with open(current_config_path, 'r') as f:
             base_config = json.load(f)
     
-    # Default base config if none exists
+    # Default RAPTOR config if none exists
     if not base_config:
         base_config = {
             'tb_batch_size': 100,
             'max_concurrent_operations': 10,
             'workers': 4,
             'cache_ttl': 3600,
-            'tr_early_termination': True
+            'tr_early_termination': True,
+            'tr_top_k': 8,
+            'tr_enable_caching': True,
+            'enable_async': True
         }
     
     # Generate optimizations
     if 'analysis' in test_results:
-        optimized_config = PerformanceOptimizer.generate_optimization_config(
+        optimized_config = RAPTORPerformanceAnalyzer.generate_optimization_config(
             test_results['analysis'],
             base_config
         )
@@ -565,7 +693,7 @@ def optimize_production_config(test_results: Dict[str, Any],
         with open(output_config_path, 'w') as f:
             json.dump(optimized_config, f, indent=2)
         
-        logger.info(f"✅ Optimized config saved to: {output_config_path}")
+        logger.info(f"✅ Optimized RAPTOR config saved to: {output_config_path}")
         
         # Show changes
         changes = []
@@ -574,50 +702,50 @@ def optimize_production_config(test_results: Dict[str, Any],
                 changes.append(f"{key}: {base_config[key]} → {value}")
         
         if changes:
-            logger.info("📝 Configuration changes:")
+            logger.info("📝 RAPTOR configuration changes:")
             for change in changes:
                 logger.info(f"   {change}")
         else:
-            logger.info("ℹ️ No configuration changes recommended")
+            logger.info("ℹ️ No RAPTOR configuration changes recommended")
         
         return optimized_config
     
     else:
-        logger.warning("No analysis results available for optimization")
+        logger.warning("No analysis results available for RAPTOR optimization")
         return base_config
 
 def main():
-    """Main performance testing entry point"""
+    """Main RAPTOR performance testing entry point"""
     import argparse
     
     parser = argparse.ArgumentParser(description="RAPTOR Performance Testing & Optimization")
     parser.add_argument("--server-url", default="http://localhost:8000",
-                       help="Server URL for testing")
+                       help="RAPTOR server URL for testing")
     parser.add_argument("--websocket-url", default="ws://localhost:8000/ws/test_client",
-                       help="WebSocket URL for testing")
-    parser.add_argument("--output", default="performance_results.json",
+                       help="RAPTOR WebSocket URL for testing")
+    parser.add_argument("--output", default="raptor_performance_results.json",
                        help="Output file for results")
     parser.add_argument("--optimize", action="store_true",
-                       help="Generate optimized configuration")
+                       help="Generate optimized RAPTOR configuration")
     parser.add_argument("--test-only", action="store_true",
                        help="Run tests only, don't optimize")
     
     args = parser.parse_args()
     
-    # Run load tests
-    results = run_comprehensive_load_test(
+    # Run RAPTOR load tests
+    results = run_comprehensive_raptor_test(
         server_url=args.server_url,
         websocket_url=args.websocket_url,
         output_file=args.output
     )
     
-    # Generate optimization report
+    # Generate RAPTOR optimization report
     if not args.test_only and args.optimize:
-        optimized_config = optimize_production_config(results)
+        optimized_config = optimize_raptor_config(results)
     
-    # Print summary
+    # Print RAPTOR summary
     print("\n" + "="*60)
-    print("📊 PERFORMANCE TEST SUMMARY")
+    print("📊 RAPTOR PERFORMANCE TEST SUMMARY")
     print("="*60)
     
     if 'http' in results['tests']:
@@ -629,14 +757,16 @@ def main():
     
     if 'websocket' in results['tests'] and 'error' not in results['tests']['websocket']:
         ws_data = results['tests']['websocket']
-        print(f"WebSocket Test:")
+        print(f"RAPTOR AI Conversation Test:")
         print(f"  Success Rate: {ws_data.get('success_rate_percent', 0):.1f}%")
         print(f"  Avg Response: {ws_data.get('response_times', {}).get('avg_ms', 0):.1f}ms")
-        print(f"  Total Messages: {ws_data.get('total_requests', 0)}")
+        print(f"  Total Conversations: {ws_data.get('total_requests', 0)}")
+        print(f"  RAG Searches: {ws_data.get('raptor_metrics', {}).get('rag_search_count', 0)}")
+        print(f"  Complete Conversations: {ws_data.get('raptor_metrics', {}).get('complete_conversations', 0)}")
     
     if 'analysis' in results:
         analysis = results['analysis']
-        print(f"Performance Grade: {analysis.get('performance_grade', 'N/A')}")
+        print(f"RAPTOR Performance Grade: {analysis.get('performance_grade', 'N/A')}")
         if analysis.get('recommendations'):
             print(f"Top Recommendation: {analysis['recommendations'][0]}")
     

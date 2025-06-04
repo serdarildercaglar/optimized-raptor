@@ -1,6 +1,6 @@
 """
 DOSYA: generic-qa-server.py
-AÇIKLAMA: Jenerik soru-cevap asistanı - RAPTOR RAG sistemi ile entegre WebSocket sunucusu
+AÇIKLAMA: Enhanced RAPTOR soru-cevap asistanı - Management endpoints ile
 """
 
 from dotenv import load_dotenv, find_dotenv
@@ -36,16 +36,126 @@ import redis.asyncio as redis
 import uuid
 from openai import AsyncOpenAI
 import asyncio
-
-app = FastAPI(title="Generic QA Server", description="RAPTOR-powered Question Answering System")
-# Health check endpoint'inin enhanced versiyonu için gerekli ek kod
-
-import asyncio
 import time
 import logging
-from typing import Dict, Any
+import psutil
+import gc
+import os
+from datetime import datetime, timedelta
+from typing import Optional
 
-# Global model loading state tracker
+app = FastAPI(title="Enhanced RAPTOR QA Server", description="RAPTOR-powered Question Answering System with Management")
+
+# ====================================================================
+# ENHANCED LOGGING & MONITORING
+# ====================================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Global metrics collector
+class SystemMetrics:
+    def __init__(self):
+        self.start_time = time.time()
+        self.request_count = 0
+        self.error_count = 0
+        self.websocket_connections = 0
+        self.chat_sessions = 0
+        self.raptor_queries = 0
+        self.last_reset = time.time()
+    
+    def increment_request(self):
+        self.request_count += 1
+    
+    def increment_error(self):
+        self.error_count += 1
+    
+    def update_connections(self, count: int):
+        self.websocket_connections = count
+    
+    def increment_raptor_query(self):
+        self.raptor_queries += 1
+    
+    def get_uptime_seconds(self):
+        return time.time() - self.start_time
+    
+    def reset_counters(self):
+        self.request_count = 0
+        self.error_count = 0
+        self.raptor_queries = 0
+        self.last_reset = time.time()
+
+# Global metrics instance
+system_metrics = SystemMetrics()
+
+# ====================================================================
+# REDIS & OPENAI CONFIGURATION
+# ====================================================================
+
+# Redis yapılandırması
+redis_client = redis.Redis(
+    host='localhost', 
+    port=6379, 
+    db=0, 
+    password='Ph4nt0m4+4',
+    decode_responses=True
+)
+
+openai_client = AsyncOpenAI()
+
+# ====================================================================
+# ENHANCED CONNECTION MANAGER
+# ====================================================================
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+
+    async def connect(self, websocket: WebSocket, client_id: str):
+        await websocket.accept()
+        self.active_connections[client_id] = websocket
+        system_metrics.chat_sessions += 1  # Track sessions
+        logger.info(f"Client {client_id} connected. Total connections: {len(self.active_connections)}")
+
+    def disconnect(self, client_id: str):
+        if client_id in self.active_connections:
+            del self.active_connections[client_id]
+            logger.info(f"Client {client_id} disconnected. Total connections: {len(self.active_connections)}")
+
+    async def send_message(self, message: str, client_id: str):
+        if client_id in self.active_connections:
+            await self.active_connections[client_id].send_text(message)
+
+    async def send_stream_chunk(self, chunk: dict, client_id: str):
+        if client_id in self.active_connections:
+            await self.active_connections[client_id].send_text(json.dumps(chunk))
+
+manager = ConnectionManager()
+
+# ====================================================================
+# MIDDLEWARE: Request tracking
+# ====================================================================
+
+@app.middleware("http")
+async def track_requests(request, call_next):
+    """Request tracking middleware"""
+    system_metrics.increment_request()
+    
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as e:
+        system_metrics.increment_error()
+        logger.error(f"Request error: {e}")
+        raise e
+
+# ====================================================================
+# MODEL LOADING STATE TRACKER (Enhanced)
+# ====================================================================
+
 MODEL_LOADING_STATE = {
     'models_loaded': False,
     'loading_start_time': time.time(),
@@ -55,7 +165,7 @@ MODEL_LOADING_STATE = {
     'raptor_tree_ready': False
 }
 
-async def check_model_loading_status() -> Dict[str, Any]:
+async def check_model_loading_status() -> Dict[str, any]:
     """Model yükleme durumunu kontrol eder"""
     global MODEL_LOADING_STATE
     
@@ -104,6 +214,552 @@ async def check_model_loading_status() -> Dict[str, Any]:
         MODEL_LOADING_STATE['loading_errors'].append(str(e))
         return MODEL_LOADING_STATE
 
+# ====================================================================
+# KRITIK 5 MANAGEMENT ENDPOINT
+# ====================================================================
+
+# 1. DELETE /cache/clear - Memory leaks prevention
+@app.delete("/cache/clear")
+async def clear_cache():
+    """Tüm cache'leri temizle - Memory leak prevention"""
+    try:
+        start_time = time.time()
+        cleared_items = {
+            "redis_cache": 0,
+            "raptor_cache": 0,
+            "embedding_cache": 0,
+            "python_gc": 0
+        }
+        
+        # 1. Redis cache temizle
+        try:
+            # Chat history dışında cache'leri temizle
+            pipeline = redis_client.pipeline()
+            
+            # Pattern'lere göre cache key'leri bul ve sil
+            cache_patterns = [
+                "cache:*", 
+                "temp:*", 
+                "session_temp:*",
+                "query_cache:*"
+            ]
+            
+            for pattern in cache_patterns:
+                keys = await redis_client.keys(pattern)
+                if keys:
+                    cleared_items["redis_cache"] += len(keys)
+                    for key in keys:
+                        pipeline.delete(key)
+            
+            await pipeline.execute()
+            
+        except Exception as e:
+            logger.warning(f"Redis cache clear error: {e}")
+        
+        # 2. RAPTOR cache temizle
+        try:
+            if RA and hasattr(RA, 'clear_all_caches'):
+                RA.clear_all_caches()
+                cleared_items["raptor_cache"] = 1
+            
+            if RA and hasattr(RA, 'retriever') and hasattr(RA.retriever, 'clear_cache'):
+                RA.retriever.clear_cache()
+                cleared_items["raptor_cache"] += 1
+                
+        except Exception as e:
+            logger.warning(f"RAPTOR cache clear error: {e}")
+        
+        # 3. Embedding model cache temizle
+        try:
+            if hasattr(RA, 'tree_builder') and hasattr(RA.tree_builder, 'embedding_models'):
+                for model_name, model in RA.tree_builder.embedding_models.items():
+                    if hasattr(model, 'cache') and model.cache:
+                        if hasattr(model.cache, 'memory_cache'):
+                            cache_size = len(model.cache.memory_cache)
+                            model.cache.memory_cache.clear()
+                            cleared_items["embedding_cache"] += cache_size
+                            
+        except Exception as e:
+            logger.warning(f"Embedding cache clear error: {e}")
+        
+        # 4. Python garbage collection
+        try:
+            collected = gc.collect()
+            cleared_items["python_gc"] = collected
+        except Exception as e:
+            logger.warning(f"Garbage collection error: {e}")
+        
+        clear_time = time.time() - start_time
+        
+        return {
+            "status": "success",
+            "message": "All caches cleared successfully",
+            "cleared_items": cleared_items,
+            "clear_time_seconds": round(clear_time, 3),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Cache clear failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Cache clear failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+
+# 2. GET /memory/usage - Resource monitoring
+@app.get("/memory/usage")
+async def get_memory_usage():
+    """Detaylı memory kullanım bilgileri"""
+    try:
+        # System memory
+        memory = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        
+        # Process-specific memory
+        process = psutil.Process()
+        process_memory = process.memory_info()
+        
+        # Redis memory (eğer local ise)
+        redis_memory = {}
+        try:
+            redis_info = await redis_client.info('memory')
+            redis_memory = {
+                "used_memory_mb": round(redis_info.get('used_memory', 0) / (1024*1024), 2),
+                "used_memory_rss_mb": round(redis_info.get('used_memory_rss', 0) / (1024*1024), 2),
+                "used_memory_peak_mb": round(redis_info.get('used_memory_peak', 0) / (1024*1024), 2)
+            }
+        except:
+            redis_memory = {"status": "unavailable"}
+        
+        # Python memory usage
+        python_memory = {
+            "rss_mb": round(process_memory.rss / (1024*1024), 2),
+            "vms_mb": round(process_memory.vms / (1024*1024), 2),
+            "percent": round(process.memory_percent(), 2),
+            "gc_objects": len(gc.get_objects())
+        }
+        
+        # RAPTOR-specific memory estimation
+        raptor_memory = {}
+        try:
+            if RA and RA.tree:
+                raptor_memory = {
+                    "tree_nodes": len(RA.tree.all_nodes),
+                    "tree_layers": RA.tree.num_layers,
+                    "estimated_tree_mb": round(len(RA.tree.all_nodes) * 0.1, 2)  # Rough estimate
+                }
+        except:
+            raptor_memory = {"status": "unavailable"}
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "system_memory": {
+                "total_gb": round(memory.total / (1024**3), 2),
+                "available_gb": round(memory.available / (1024**3), 2),
+                "used_gb": round(memory.used / (1024**3), 2),
+                "usage_percent": memory.percent,
+                "free_gb": round(memory.free / (1024**3), 2)
+            },
+            "swap_memory": {
+                "total_gb": round(swap.total / (1024**3), 2),
+                "used_gb": round(swap.used / (1024**3), 2),
+                "usage_percent": swap.percent
+            },
+            "process_memory": python_memory,
+            "redis_memory": redis_memory,
+            "raptor_memory": raptor_memory,
+            "memory_alerts": _get_memory_alerts(memory, process)
+        }
+        
+    except Exception as e:
+        logger.error(f"Memory usage check failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Memory check failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+
+def _get_memory_alerts(memory, process):
+    """Memory usage alerts"""
+    alerts = []
+    
+    if memory.percent > 90:
+        alerts.append("CRITICAL: System memory usage > 90%")
+    elif memory.percent > 80:
+        alerts.append("WARNING: System memory usage > 80%")
+    
+    if process.memory_percent() > 50:
+        alerts.append("WARNING: Process memory usage > 50%")
+    
+    available_gb = memory.available / (1024**3)
+    if available_gb < 1:
+        alerts.append("CRITICAL: Less than 1GB memory available")
+    elif available_gb < 2:
+        alerts.append("WARNING: Less than 2GB memory available")
+    
+    return alerts
+
+# 3. DELETE /chat_history/{session_id} - Privacy compliance
+@app.delete("/chat_history/{session_id}")
+async def delete_chat_history(session_id: str):
+    """Specific session'ın chat history'sini sil"""
+    try:
+        start_time = time.time()
+        
+        # Session ID validation
+        if not session_id or len(session_id) < 5:
+            return {
+                "status": "error",
+                "message": "Invalid session ID",
+                "session_id": session_id
+            }
+        
+        # Chat history key
+        history_key = f"chat_history:{session_id}"
+        
+        # Check if session exists
+        exists = await redis_client.exists(history_key)
+        if not exists:
+            return {
+                "status": "warning",
+                "message": "Session not found",
+                "session_id": session_id,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Get message count before deletion
+        message_count = await redis_client.llen(history_key)
+        
+        # Delete the session
+        deleted = await redis_client.delete(history_key)
+        
+        # Also clean any related temporary data
+        temp_patterns = [
+            f"session_temp:{session_id}",
+            f"cache:{session_id}:*",
+            f"temp:{session_id}:*"
+        ]
+        
+        additional_deleted = 0
+        for pattern in temp_patterns:
+            if ':*' in pattern:
+                keys = await redis_client.keys(pattern)
+                if keys:
+                    additional_deleted += await redis_client.delete(*keys)
+            else:
+                additional_deleted += await redis_client.delete(pattern)
+        
+        delete_time = time.time() - start_time
+        
+        return {
+            "status": "success",
+            "message": "Chat history deleted successfully",
+            "session_id": session_id,
+            "deleted_messages": int(message_count),
+            "additional_keys_deleted": additional_deleted,
+            "delete_time_seconds": round(delete_time, 3),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Chat history deletion failed for {session_id}: {e}")
+        return {
+            "status": "error",
+            "message": f"Deletion failed: {str(e)}",
+            "session_id": session_id,
+            "timestamp": datetime.now().isoformat()
+        }
+
+# 4. GET /metrics/live - Real-time system health
+@app.get("/metrics/live")
+async def get_live_metrics():
+    """Real-time sistem metrikleri ve sağlık durumu"""
+    try:
+        current_time = time.time()
+        
+        # Update active connections
+        system_metrics.update_connections(len(manager.active_connections))
+        
+        # System resources
+        memory = psutil.virtual_memory()
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        
+        # Redis stats
+        redis_stats = {}
+        try:
+            redis_info = await redis_client.info()
+            redis_stats = {
+                "connected_clients": redis_info.get('connected_clients', 0),
+                "used_memory_mb": round(redis_info.get('used_memory', 0) / (1024*1024), 2),
+                "total_commands_processed": redis_info.get('total_commands_processed', 0),
+                "keyspace_hits": redis_info.get('keyspace_hits', 0),
+                "keyspace_misses": redis_info.get('keyspace_misses', 0)
+            }
+            
+            # Cache hit ratio
+            hits = redis_stats.get('keyspace_hits', 0)
+            misses = redis_stats.get('keyspace_misses', 0)
+            total = hits + misses
+            redis_stats['cache_hit_ratio'] = round((hits / max(total, 1)) * 100, 2)
+            
+        except Exception as e:
+            redis_stats = {"status": "error", "message": str(e)}
+        
+        # RAPTOR performance
+        raptor_stats = {}
+        try:
+            if RA and hasattr(RA, 'get_performance_summary'):
+                perf_summary = RA.get_performance_summary()
+                raptor_stats = {
+                    "tree_ready": bool(RA.tree),
+                    "total_nodes": len(RA.tree.all_nodes) if RA.tree else 0,
+                    "tree_layers": RA.tree.num_layers if RA.tree else 0,
+                    "performance_summary": perf_summary
+                }
+        except Exception as e:
+            raptor_stats = {"status": "error", "message": str(e)}
+        
+        # Active session count
+        try:
+            session_pattern = "chat_history:*"
+            session_keys = await redis_client.keys(session_pattern)
+            active_sessions = len(session_keys)
+        except:
+            active_sessions = 0
+        
+        # Calculate rates
+        uptime = system_metrics.get_uptime_seconds()
+        time_since_reset = current_time - system_metrics.last_reset
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "uptime_seconds": round(uptime, 1),
+            "uptime_formatted": str(timedelta(seconds=int(uptime))),
+            
+            "system_resources": {
+                "memory_usage_percent": memory.percent,
+                "memory_available_gb": round(memory.available / (1024**3), 2),
+                "cpu_usage_percent": round(cpu_percent, 1),
+                "load_average": list(psutil.getloadavg()) if hasattr(psutil, 'getloadavg') else None
+            },
+            
+            "application_metrics": {
+                "active_websocket_connections": system_metrics.websocket_connections,
+                "total_requests": system_metrics.request_count,
+                "total_errors": system_metrics.error_count,
+                "error_rate_percent": round((system_metrics.error_count / max(system_metrics.request_count, 1)) * 100, 2),
+                "requests_per_second": round(system_metrics.request_count / max(time_since_reset, 1), 2),
+                "raptor_queries": system_metrics.raptor_queries
+            },
+            
+            "redis_metrics": redis_stats,
+            "raptor_metrics": raptor_stats,
+            
+            "session_stats": {
+                "active_sessions": active_sessions,
+                "chat_sessions_created": system_metrics.chat_sessions
+            },
+            
+            "health_status": _calculate_health_status(memory.percent, cpu_percent, redis_stats, raptor_stats)
+        }
+        
+    except Exception as e:
+        logger.error(f"Live metrics failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Metrics collection failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+
+def _calculate_health_status(memory_percent, cpu_percent, redis_stats, raptor_stats):
+    """Overall system health calculation"""
+    issues = []
+    health_score = 100
+    
+    # Memory check
+    if memory_percent > 90:
+        issues.append("Critical memory usage")
+        health_score -= 30
+    elif memory_percent > 80:
+        issues.append("High memory usage")
+        health_score -= 15
+    
+    # CPU check
+    if cpu_percent > 90:
+        issues.append("Critical CPU usage")
+        health_score -= 25
+    elif cpu_percent > 80:
+        issues.append("High CPU usage")
+        health_score -= 10
+    
+    # Redis check
+    if "error" in redis_stats.get("status", ""):
+        issues.append("Redis connectivity issues")
+        health_score -= 40
+    
+    # RAPTOR check
+    if not raptor_stats.get("tree_ready", False):
+        issues.append("RAPTOR tree not ready")
+        health_score -= 35
+    
+    # Determine status
+    if health_score >= 90:
+        status = "excellent"
+    elif health_score >= 75:
+        status = "good"
+    elif health_score >= 50:
+        status = "degraded"
+    else:
+        status = "critical"
+    
+    return {
+        "status": status,
+        "health_score": max(health_score, 0),
+        "issues": issues
+    }
+
+# 5. POST /raptor/optimize - Performance tuning
+@app.post("/raptor/optimize")
+async def optimize_raptor_performance():
+    """RAPTOR sistemini optimize et"""
+    try:
+        start_time = time.time()
+        optimization_results = {
+            "cache_cleanup": False,
+            "expired_cache_cleanup": False,
+            "garbage_collection": False,
+            "retriever_optimization": False,
+            "embedding_cache_optimization": False
+        }
+        
+        if not RA:
+            return {
+                "status": "error",
+                "message": "RAPTOR system not available",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # 1. RAPTOR cache cleanup
+        try:
+            if hasattr(RA, 'clear_all_caches'):
+                RA.clear_all_caches()
+                optimization_results["cache_cleanup"] = True
+        except Exception as e:
+            logger.warning(f"RAPTOR cache cleanup error: {e}")
+        
+        # 2. Expired cache cleanup
+        try:
+            if hasattr(RA, 'retriever') and hasattr(RA.retriever, 'cleanup_expired_cache'):
+                RA.retriever.cleanup_expired_cache()
+                optimization_results["expired_cache_cleanup"] = True
+        except Exception as e:
+            logger.warning(f"Expired cache cleanup error: {e}")
+        
+        # 3. Retriever optimization
+        try:
+            if hasattr(RA, 'optimize_performance'):
+                RA.optimize_performance()
+                optimization_results["retriever_optimization"] = True
+        except Exception as e:
+            logger.warning(f"Retriever optimization error: {e}")
+        
+        # 4. Embedding model cache optimization
+        try:
+            if hasattr(RA, 'tree_builder') and hasattr(RA.tree_builder, 'embedding_models'):
+                for model_name, model in RA.tree_builder.embedding_models.items():
+                    if hasattr(model, 'cache') and model.cache:
+                        # Clean expired entries
+                        if hasattr(model.cache, 'cleanup_expired'):
+                            model.cache.cleanup_expired()
+                        # Optimize memory cache size
+                        elif hasattr(model.cache, 'memory_cache'):
+                            cache_size = len(model.cache.memory_cache)
+                            if cache_size > 1000:  # If too large, keep only recent 500
+                                # This is a simple optimization - keep most recent items
+                                cache_items = list(model.cache.memory_cache.items())
+                                model.cache.memory_cache.clear()
+                                model.cache.memory_cache.update(dict(cache_items[-500:]))
+                
+                optimization_results["embedding_cache_optimization"] = True
+                
+        except Exception as e:
+            logger.warning(f"Embedding cache optimization error: {e}")
+        
+        # 5. Python garbage collection
+        try:
+            collected = gc.collect()
+            optimization_results["garbage_collection"] = collected
+        except Exception as e:
+            logger.warning(f"Garbage collection error: {e}")
+        
+        # Get performance stats after optimization
+        performance_stats = {}
+        try:
+            if hasattr(RA, 'get_performance_summary'):
+                performance_stats = RA.get_performance_summary()
+        except:
+            performance_stats = {"status": "unavailable"}
+        
+        optimization_time = time.time() - start_time
+        
+        return {
+            "status": "success",
+            "message": "RAPTOR optimization completed",
+            "optimization_results": optimization_results,
+            "optimization_time_seconds": round(optimization_time, 3),
+            "performance_stats": performance_stats,
+            "recommendations": _get_optimization_recommendations(performance_stats),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"RAPTOR optimization failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Optimization failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }
+
+def _get_optimization_recommendations(performance_stats):
+    """RAPTOR performance based recommendations"""
+    recommendations = []
+    
+    try:
+        # Check cache hit rate
+        if 'retriever' in performance_stats:
+            cache_hit_rate = performance_stats['retriever'].get('cache_hit_rate', 0)
+            if cache_hit_rate < 0.5:
+                recommendations.append("Low cache hit rate - consider increasing cache TTL")
+            elif cache_hit_rate > 0.9:
+                recommendations.append("Excellent cache performance")
+        
+        # Check average query time
+        if 'pipeline' in performance_stats:
+            avg_query_time = performance_stats['pipeline'].get('avg_query_time', 0)
+            if avg_query_time > 5:
+                recommendations.append("High query times - consider enabling early termination")
+            elif avg_query_time < 1:
+                recommendations.append("Excellent query performance")
+        
+        # Check tree stats
+        if 'tree_stats' in performance_stats:
+            total_nodes = performance_stats['tree_stats'].get('total_nodes', 0)
+            if total_nodes > 10000:
+                recommendations.append("Large tree detected - monitor memory usage")
+        
+        if not recommendations:
+            recommendations.append("System performance is optimal")
+            
+    except Exception as e:
+        recommendations.append(f"Unable to generate recommendations: {str(e)}")
+    
+    return recommendations
+
+# ====================================================================
+# ORIGINAL ENDPOINTS (Enhanced)
+# ====================================================================
+
 # Enhanced health check endpoint
 @app.get("/health")
 async def enhanced_health_check():
@@ -131,7 +787,6 @@ async def enhanced_health_check():
     # System resources (optional)
     system_info = {}
     try:
-        import psutil
         memory = psutil.virtual_memory()
         system_info = {
             'memory_usage_percent': round(memory.percent, 1),
@@ -139,24 +794,6 @@ async def enhanced_health_check():
             'cpu_usage_percent': round(psutil.cpu_percent(interval=0.1), 1)
         }
     except ImportError:
-        pass
-    
-    # GPU info (optional)
-    gpu_info = {}
-    try:
-        import subprocess
-        gpu_output = subprocess.check_output(['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total', '--format=csv,noheader,nounits'], 
-                                           stderr=subprocess.DEVNULL, timeout=5).decode()
-        gpu_lines = gpu_output.strip().split('\n')
-        if gpu_lines and gpu_lines[0]:
-            util, mem_used, mem_total = gpu_lines[0].split(', ')
-            gpu_info = {
-                'gpu_utilization_percent': int(util),
-                'gpu_memory_used_mb': int(mem_used),
-                'gpu_memory_total_mb': int(mem_total),
-                'gpu_memory_usage_percent': round((int(mem_used) / int(mem_total)) * 100, 1)
-            }
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, ValueError):
         pass
     
     # Overall status
@@ -190,78 +827,34 @@ async def enhanced_health_check():
     if system_info:
         response["system"] = system_info
     
-    if gpu_info:
-        response["gpu"] = gpu_info
-    
     return response
 
-# Model loading monitoring endpoint (additional)
+# Model loading monitoring endpoint
 @app.get("/models/status")
 async def model_loading_status():
     """Sadece model yükleme durumunu döndürür"""
     return await check_model_loading_status()
 
-# Startup event'i için model loading tracker
-@app.on_event("startup")
-async def startup_event():
-    """Uygulama başlangıcında model loading tracking'i başlat"""
-    global MODEL_LOADING_STATE
-    MODEL_LOADING_STATE['loading_start_time'] = time.time()
-    
-    # Background task olarak model status check'i çalıştır
-    asyncio.create_task(periodic_model_check())
+# Chat geçmişini getiren endpoint
+@app.get("/chat_history/{session_id}")
+async def get_chat_history(session_id: str):
+    """Belirli bir session'ın chat geçmişini döndürür"""
+    history = await redis_client.lrange(f"chat_history:{session_id}", 0, -1)
+    return [json.loads(msg) for msg in history]
 
-async def periodic_model_check():
-    """Periyodik olarak model durumunu kontrol et"""
-    while True:
-        try:
-            await check_model_loading_status()
-            await asyncio.sleep(30)  # Her 30 saniyede bir kontrol et
-        except Exception as e:
-            logging.error(f"Periodic model check error: {e}")
-            await asyncio.sleep(60)  # Hata durumunda 60 saniye bekle
-# Redis yapılandırması
-redis_client = redis.Redis(
-    host='localhost', 
-    port=6379, 
-    db=0, 
-    password='Ph4nt0m4+4',
-    decode_responses=True
-)
+# ====================================================================
+# ENHANCED RETRIEVE FUNCTION (with metrics tracking)
+# ====================================================================
 
-openai_client = AsyncOpenAI()
-
-# WebSocket bağlantı yöneticisi
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
-
-    async def connect(self, websocket: WebSocket, client_id: str):
-        await websocket.accept()
-        self.active_connections[client_id] = websocket
-
-    def disconnect(self, client_id: str):
-        if client_id in self.active_connections:
-            del self.active_connections[client_id]
-
-    async def send_message(self, message: str, client_id: str):
-        if client_id in self.active_connections:
-            await self.active_connections[client_id].send_text(message)
-
-    async def send_stream_chunk(self, chunk: dict, client_id: str):
-        if client_id in self.active_connections:
-            await self.active_connections[client_id].send_text(json.dumps(chunk))
-
-manager = ConnectionManager()
-
-# 🚀 PARALEL RETRIEVE FONKSİYONU
 async def batch_retrieve_async(queries: List[str]) -> Dict[str, any]:
     """
-    Paralel retrieve + unique content filtering
-    Birden fazla sorguyu aynı anda işler ve duplicate içerikleri kaldırır
+    Paralel retrieve + unique content filtering with metrics tracking
     """
     if not queries:
         return {"unique_contexts": [], "query_mapping": {}, "stats": {}}
+    
+    # Track RAPTOR query
+    system_metrics.increment_raptor_query()
     
     # Her query için async task oluştur
     async def retrieve_single(query: str) -> tuple:
@@ -326,9 +919,14 @@ async def batch_retrieve_async(queries: List[str]) -> Dict[str, any]:
         }
     }
 
+# ====================================================================
+# STREAM RESPONSE PROCESSING (Enhanced with metrics)
+# ====================================================================
+
 async def process_stream_response(response_stream, session_id: str, client_id: str):
     """
     OpenAI stream response'unu işler ve tool calls varsa onları yönetir
+    Enhanced with metrics tracking
     """
     chat_history = []
     full_content = ""
@@ -405,7 +1003,7 @@ async def process_stream_response(response_stream, session_id: str, client_id: s
             try:
                 function_args = json.loads(tool_call['function']['arguments'])
             except json.JSONDecodeError:
-                print(f"JSON decode error for arguments: {tool_call['function']['arguments']}")
+                logger.error(f"JSON decode error for arguments: {tool_call['function']['arguments']}")
                 continue
             
             call_id = tool_call['id']
@@ -489,6 +1087,7 @@ async def process_stream_response(response_stream, session_id: str, client_id: s
                     })
                     
                 except Exception as e:
+                    logger.error(f"RAG search error: {e}")
                     chat_history.append({
                         "role": "tool", 
                         "content": json.dumps({
@@ -533,7 +1132,7 @@ async def process_stream_response(response_stream, session_id: str, client_id: s
             await redis_client.rpush(f"chat_history:{session_id}", json.dumps(chat_history[-1]))
             
         except Exception as e:
-            print(f"Final response error: {e}")
+            logger.error(f"Final response error: {e}")
             await manager.send_stream_chunk({
                 "type": "content_chunk",
                 "content": f"Cevap oluştururken bir hata oluştu: {str(e)}"
@@ -564,9 +1163,13 @@ async def process_stream_response(response_stream, session_id: str, client_id: s
         
         return full_content
 
+# ====================================================================
+# MAIN WEBSOCKET ENDPOINT (Enhanced)
+# ====================================================================
+
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    """Ana WebSocket endpoint - kullanıcı ile etkileşim"""
+    """Ana WebSocket endpoint - Enhanced with metrics tracking"""
     session_id = str(uuid.uuid4())
     await manager.connect(websocket, client_id)
 
@@ -733,7 +1336,8 @@ Unutma: Sen bir bilgi köprüsüsün. Kullanıcı ile dokümanlar arasında akı
                 await process_stream_response(response_stream, session_id, client_id)
                 
             except Exception as e:
-                print(f"OpenAI API error: {e}")
+                logger.error(f"OpenAI API error: {e}")
+                system_metrics.increment_error()
                 await manager.send_stream_chunk({
                     "type": "content_chunk",
                     "content": f"Üzgünüm, bir hata oluştu: {str(e)}"
@@ -745,36 +1349,51 @@ Unutma: Sen bir bilgi köprüsüsün. Kullanıcı ile dokümanlar arasında akı
     except WebSocketDisconnect:
         manager.disconnect(client_id)
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}")
+        system_metrics.increment_error()
         manager.disconnect(client_id)
 
-# Chat geçmişini getiren endpoint
-@app.get("/chat_history/{session_id}")
-async def get_chat_history(session_id: str):
-    """Belirli bir session'ın chat geçmişini döndürür"""
-    history = await redis_client.lrange(f"chat_history:{session_id}", 0, -1)
-    return [json.loads(msg) for msg in history]
+# ====================================================================
+# STARTUP & SHUTDOWN EVENTS
+# ====================================================================
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    """Sistem sağlık kontrolü"""
+@app.on_event("startup")
+async def startup_event():
+    """Uygulama başlangıcında model loading tracking'i başlat"""
+    global MODEL_LOADING_STATE
+    MODEL_LOADING_STATE['loading_start_time'] = time.time()
+    
+    logger.info("🚀 Enhanced RAPTOR QA Server starting up...")
+    logger.info("📊 Management endpoints enabled")
+    
+    # Background task olarak model status check'i çalıştır
+    asyncio.create_task(periodic_model_check())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Graceful shutdown"""
+    logger.info("🛑 Server shutting down...")
+    
+    # Close Redis connections
     try:
-        # Redis bağlantısını test et
-        await redis_client.ping()
-        redis_status = "healthy"
-    except:
-        redis_status = "unhealthy"
-    
-    # RAPTOR durumunu kontrol et
-    raptor_status = "healthy" if RA and RA.tree else "unhealthy"
-    
-    return {
-        "status": "healthy" if redis_status == "healthy" and raptor_status == "healthy" else "unhealthy",
-        "redis": redis_status,
-        "raptor": raptor_status,
-        "active_connections": len(manager.active_connections)
-    }
+        await redis_client.close()
+        logger.info("✅ Redis connections closed")
+    except Exception as e:
+        logger.error(f"Redis shutdown error: {e}")
+
+async def periodic_model_check():
+    """Periyodik olarak model durumunu kontrol et"""
+    while True:
+        try:
+            await check_model_loading_status()
+            await asyncio.sleep(30)  # Her 30 saniyede bir kontrol et
+        except Exception as e:
+            logger.error(f"Periodic model check error: {e}")
+            await asyncio.sleep(60)  # Hata durumunda 60 saniye bekle
+
+# ====================================================================
+# MAIN
+# ====================================================================
 
 if __name__ == "__main__":
     import uvicorn

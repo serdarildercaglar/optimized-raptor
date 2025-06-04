@@ -1,0 +1,86 @@
+{
+  "timestamp": 1749015543.3456948,
+  "server_url": "http://localhost:8000",
+  "websocket_url": "ws://localhost:8000/ws/test_client",
+  "raptor_version": "optimized",
+  "tests": {
+    "http": {
+      "total_requests": 150,
+      "successful_requests": 150,
+      "failed_requests": 0,
+      "timeout_requests": 0,
+      "success_rate_percent": 100.0,
+      "duration_seconds": 14.96,
+      "requests_per_second": 10.03,
+      "raptor_metrics": {
+        "stream_responses": 0,
+        "tool_call_responses": 0,
+        "rag_search_count": 0,
+        "complete_conversations": 0
+      },
+      "response_times": {
+        "avg_ms": 1217.39,
+        "median_ms": 1237.44,
+        "p95_ms": 1743.74,
+        "p99_ms": 1862.6,
+        "min_ms": 405.56,
+        "max_ms": 4381.18
+      },
+      "resource_usage": {
+        "peak_memory_mb": 16251.12,
+        "peak_cpu_percent": 16.0,
+        "avg_memory_mb": 16236.09,
+        "avg_cpu_percent": 4.17
+      },
+      "error_count": 0,
+      "unique_errors": 0
+    },
+    "websocket": {
+      "total_requests": 73,
+      "successful_requests": 59,
+      "failed_requests": 0,
+      "timeout_requests": 14,
+      "success_rate_percent": 80.82,
+      "duration_seconds": 130.2,
+      "requests_per_second": 0.56,
+      "raptor_metrics": {
+        "stream_responses": 45,
+        "tool_call_responses": 2,
+        "rag_search_count": 3,
+        "complete_conversations": 59
+      },
+      "response_times": {
+        "avg_ms": 35.22,
+        "median_ms": 1.65,
+        "p95_ms": 5.57,
+        "p99_ms": 1963.85,
+        "min_ms": 0.27,
+        "max_ms": 1963.85
+      },
+      "resource_usage": {
+        "peak_memory_mb": 16728.69,
+        "peak_cpu_percent": 60.2,
+        "avg_memory_mb": 16334.56,
+        "avg_cpu_percent": 6.46
+      },
+      "error_count": 14,
+      "unique_errors": 1
+    }
+  },
+  "analysis": {
+    "performance_grade": "A",
+    "bottlenecks": [
+      "High timeout rate in AI conversations"
+    ],
+    "recommendations": [
+      "Increase WebSocket timeout and optimize retrieval"
+    ],
+    "warnings": [
+      "Moderate AI conversation failure rate",
+      "High memory usage"
+    ],
+    "optimizations": [
+      "Enable memory-optimized configuration"
+    ]
+  }
+}
