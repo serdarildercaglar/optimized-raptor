@@ -282,11 +282,15 @@
     <script>
         // Global variables
         let wsConnection = null;
+        let dashboardWsConnection = null;
         let memoryChart = null;
         let responseChart = null;
         let isConnected = false;
         let activityBuffer = [];
         let lastMetrics = null;
+
+        // API Base URL - environment'a göre değiştir
+        const API_BASE_URL = 'http://localhost:8000';
 
         // Chart data buffers (keep last 20 points)
         const memoryData = {
@@ -316,9 +320,9 @@
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
             initializeCharts();
-            connectWebSocket();
+            connectDashboardWebSocket();
             
-            // Update every 5 seconds if WS fails
+            // Fallback polling if WebSocket fails
             setInterval(() => {
                 if (!isConnected) {
                     fetchMetrics();
@@ -382,18 +386,67 @@
             });
         }
 
-        // WebSocket connection
-        function connectWebSocket() {
-            // For now, use polling since we don't have a metrics WebSocket endpoint
-            // In production, you'd implement a WebSocket endpoint for real-time metrics
-            fetchMetrics();
-            setInterval(fetchMetrics, 3000); // Update every 3 seconds
+        // Connect to real-time dashboard WebSocket
+        function connectDashboardWebSocket() {
+            try {
+                const wsUrl = `ws://localhost:8000/ws/dashboard/main_dashboard`;
+                dashboardWsConnection = new WebSocket(wsUrl);
+                
+                dashboardWsConnection.onopen = function(event) {
+                    console.log('Dashboard WebSocket connected');
+                    updateConnectionStatus(true);
+                };
+                
+                dashboardWsConnection.onmessage = function(event) {
+                    const message = JSON.parse(event.data);
+                    
+                    switch(message.type) {
+                        case 'metrics_update':
+                            updateDashboard(message.data);
+                            break;
+                        case 'alert':
+                            showNotification(message.message, message.level);
+                            break;
+                        default:
+                            console.log('Unknown message type:', message.type);
+                    }
+                };
+                
+                dashboardWsConnection.onclose = function(event) {
+                    console.log('Dashboard WebSocket disconnected');
+                    updateConnectionStatus(false);
+                    
+                    // Reconnect after 5 seconds
+                    setTimeout(connectDashboardWebSocket, 5000);
+                };
+                
+                dashboardWsConnection.onerror = function(error) {
+                    console.error('Dashboard WebSocket error:', error);
+                    updateConnectionStatus(false);
+                    
+                    // Fallback to HTTP polling
+                    fetchMetrics();
+                };
+                
+            } catch (error) {
+                console.error('Failed to establish WebSocket connection:', error);
+                // Fallback to HTTP polling
+                fetchMetrics();
+            }
         }
 
-        // Fetch metrics from REST API
+        // Enhanced fetch metrics with error handling
         async function fetchMetrics() {
             try {
-                const response = await fetch('http://localhost:8000/metrics/live');
+                const response = await fetch(`${API_BASE_URL}/metrics/live`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    // Add timeout
+                    signal: AbortSignal.timeout(10000) // 10 second timeout
+                });
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -403,12 +456,22 @@
                 console.log('Live metrics received:', data);
                 updateDashboard(data);
                 updateConnectionStatus(true);
+                
             } catch (error) {
                 console.error('Failed to fetch metrics:', error);
                 updateConnectionStatus(false);
                 
-                // Show error in dashboard
-                showNotification(`Failed to connect to RAPTOR server: ${error.message}`, 'error');
+                // Show specific error messages
+                if (error.name === 'AbortError') {
+                    showNotification('Request timeout - server may be overloaded', 'warning');
+                } else if (error.message.includes('Failed to fetch')) {
+                    showNotification('Cannot connect to RAPTOR server - check if server is running', 'error');
+                } else {
+                    showNotification(`Server error: ${error.message}`, 'error');
+                }
+                
+                // Show offline mode
+                showOfflineMode();
             }
         }
 
@@ -427,6 +490,22 @@
             }
             
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        }
+
+        // Show offline mode with cached data
+        function showOfflineMode() {
+            const statusEl = document.getElementById('connectionStatus');
+            const textEl = document.getElementById('connectionText');
+            
+            statusEl.className = 'pulse-dot status-indicator status-critical';
+            textEl.textContent = 'Offline Mode';
+            
+            // Show cached data or defaults
+            document.getElementById('healthStatus').textContent = 'Offline';
+            document.getElementById('healthScore').textContent = 'Score: --';
+            document.getElementById('activeConnections').textContent = '--';
+            document.getElementById('raptorQueries').textContent = '--';
+            document.getElementById('errorRate').textContent = '--%';
         }
 
         // Update dashboard with metrics
@@ -448,10 +527,12 @@
             
             // Calculate query rate (queries per minute)
             if (lastMetrics) {
-                const timeDiff = (new Date() - lastMetrics.timestamp) / 1000 / 60; // minutes
+                const timeDiff = (new Date().getTime() - lastMetrics.timestamp.getTime()) / 1000 / 60; // minutes
                 const queryDiff = (appMetrics.raptor_queries || 0) - (lastMetrics.application_metrics?.raptor_queries || 0);
                 const queryRate = timeDiff > 0 ? (queryDiff / timeDiff).toFixed(1) : '0';
                 document.getElementById('queryRate').textContent = `Rate: ${queryRate}/min`;
+            } else {
+                document.getElementById('queryRate').textContent = `Rate: 0/min`;
             }
             
             // System Resources
@@ -511,8 +592,8 @@
             cpuBar.style.width = cpuPercent + '%';
             
             // Color coding for bars
-            memoryBar.className = getProgressBarClass(memoryPercent);
-            cpuBar.className = getProgressBarClass(cpuPercent);
+            memoryBar.className = `h-2 rounded-full transition-all duration-500 ${getProgressBarClass(memoryPercent)}`;
+            cpuBar.className = `h-2 rounded-full transition-all duration-500 ${getProgressBarClass(cpuPercent)}`;
         }
 
         // Update RAPTOR status
@@ -520,12 +601,12 @@
             const performance = raptorMetrics.performance_summary || {};
             const pipeline = performance.pipeline || {};
             const retriever = performance.retriever || {};
-            const treeStats = performance.tree_stats || {};
+            const treeStats = raptorMetrics.tree_stats || {}; // Direct from raptor_metrics
             
-            document.getElementById('treeNodes').textContent = treeStats.total_nodes || '--';
-            document.getElementById('treeLayers').textContent = treeStats.tree_layers || '--';
-            document.getElementById('cacheHitRate').textContent = (retriever.cache_hit_rate * 100).toFixed(1) + '%' || '--%';
-            document.getElementById('avgQueryTime').textContent = (pipeline.avg_query_time * 1000).toFixed(0) + 'ms' || '--ms';
+            document.getElementById('treeNodes').textContent = raptorMetrics.total_nodes || '--';
+            document.getElementById('treeLayers').textContent = raptorMetrics.tree_layers || '--';
+            document.getElementById('cacheHitRate').textContent = ((retriever.cache_hit_rate || 0) * 100).toFixed(1) + '%' || '--%';
+            document.getElementById('avgQueryTime').textContent = ((pipeline.avg_query_time || 0) * 1000).toFixed(0) + 'ms' || '--ms';
         }
 
         // Update Redis status
@@ -662,11 +743,224 @@
 
         // Helper functions
         function getProgressBarClass(percent) {
-            if (percent > 90) return 'h-2 rounded-full transition-all duration-500 bg-red-500';
-            if (percent > 80) return 'h-2 rounded-full transition-all duration-500 bg-yellow-500';
-            return 'h-2 rounded-full transition-all duration-500 bg-green-500';
+            if (percent > 90) return 'bg-red-500';
+            if (percent > 80) return 'bg-yellow-500';
+            return 'bg-green-500';
         }
 
+        // Enhanced action handlers with proper error handling
+        async function clearCache() {
+            try {
+                showNotification('Clearing cache...', 'info');
+                
+                const response = await fetch(`${API_BASE_URL}/cache/clear`, { 
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    signal: AbortSignal.timeout(30000) // 30 second timeout for cache operations
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Cache clear result:', result);
+                
+                if (result.status === 'success') {
+                    const totalCleared = (result.cleared_items.redis_cache || 0) + 
+                                       (result.cleared_items.raptor_cache || 0) + 
+                                       (result.cleared_items.embedding_cache || 0);
+                    
+                    showNotification(
+                        `Cache cleared successfully! Freed ${totalCleared} items in ${result.clear_time_seconds}s`, 
+                        'success'
+                    );
+                    
+                    // Refresh metrics after cache clear
+                    setTimeout(fetchMetrics, 2000);
+                } else {
+                    showNotification('Cache clear failed: ' + result.message, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Cache clear error:', error);
+                
+                if (error.name === 'AbortError') {
+                    showNotification('Cache clear timeout - operation may still be running', 'warning');
+                } else {
+                    showNotification('Error clearing cache: ' + error.message, 'error');
+                }
+            }
+        }
+
+        async function optimizeRaptor() {
+            try {
+                showNotification('Optimizing RAPTOR system...', 'info');
+                
+                const response = await fetch(`${API_BASE_URL}/raptor/optimize`, { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    signal: AbortSignal.timeout(60000) // 60 second timeout for optimization
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const result = await response.json();
+                console.log('RAPTOR optimization result:', result);
+                
+                if (result.status === 'success') {
+                    let message = `RAPTOR optimization completed in ${result.optimization_time_seconds}s!`;
+                    
+                    if (result.recommendations && result.recommendations.length > 0) {
+                        message += ` Key recommendations: ${result.recommendations.slice(0, 2).join(', ')}`;
+                    }
+                    
+                    showNotification(message, 'success');
+                    
+                    // Refresh metrics after optimization
+                    setTimeout(fetchMetrics, 3000);
+                } else {
+                    showNotification('Optimization failed: ' + result.message, 'error');
+                }
+                
+            } catch (error) {
+                console.error('RAPTOR optimization error:', error);
+                
+                if (error.name === 'AbortError') {
+                    showNotification('Optimization timeout - process may still be running', 'warning');
+                } else {
+                    showNotification('Error optimizing RAPTOR: ' + error.message, 'error');
+                }
+            }
+        }
+
+        async function showMemoryUsage() {
+            try {
+                showNotification('Fetching detailed memory usage...', 'info');
+                
+                const response = await fetch(`${API_BASE_URL}/memory/usage`, {
+                    signal: AbortSignal.timeout(15000)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Memory usage details:', data);
+                
+                // Create detailed memory info modal
+                const memoryInfo = `
+=== SYSTEM MEMORY ===
+Total: ${data.system_memory?.total_gb?.toFixed(1)}GB
+Used: ${data.system_memory?.used_gb?.toFixed(1)}GB (${data.system_memory?.usage_percent?.toFixed(1)}%)
+Available: ${data.system_memory?.available_gb?.toFixed(1)}GB
+Free: ${data.system_memory?.free_gb?.toFixed(1)}GB
+
+=== PROCESS MEMORY ===
+RSS: ${data.process_memory?.rss_mb?.toFixed(1)}MB
+VMS: ${data.process_memory?.vms_mb?.toFixed(1)}MB
+Percent: ${data.process_memory?.percent?.toFixed(1)}%
+GC Objects: ${data.process_memory?.gc_objects || 'N/A'}
+
+=== REDIS MEMORY ===
+Used: ${data.redis_memory?.used_memory_mb?.toFixed(1) || 'N/A'}MB
+RSS: ${data.redis_memory?.used_memory_rss_mb?.toFixed(1) || 'N/A'}MB
+Peak: ${data.redis_memory?.used_memory_peak_mb?.toFixed(1) || 'N/A'}MB
+
+=== RAPTOR TREE ===
+Nodes: ${data.raptor_memory?.tree_nodes || 'N/A'}
+Layers: ${data.raptor_memory?.tree_layers || 'N/A'}
+Est. Size: ${data.raptor_memory?.estimated_tree_mb?.toFixed(1) || 'N/A'}MB
+
+=== ALERTS ===
+${data.memory_alerts?.length ? data.memory_alerts.join('\n') : 'No active alerts'}
+                `.trim();
+                
+                // Create and show modal
+                showMemoryModal(memoryInfo, data);
+                showNotification('Memory details loaded', 'success');
+                
+            } catch (error) {
+                console.error('Memory usage error:', error);
+                showNotification('Error fetching memory details: ' + error.message, 'error');
+            }
+        }
+
+        // Create memory details modal
+        function showMemoryModal(memoryInfo, data) {
+            // Remove existing modal if any
+            const existingModal = document.getElementById('memoryModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Create modal
+            const modal = document.createElement('div');
+            modal.id = 'memoryModal';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="glass-card rounded-xl max-w-4xl w-full mx-4 max-h-screen overflow-hidden">
+                    <div class="p-6 border-b border-gray-600">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-xl font-semibold text-white">💻 Memory Usage Details</h3>
+                            <button onclick="closeMemoryModal()" class="text-gray-400 hover:text-white">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <pre class="text-gray-300 text-sm bg-gray-800 p-4 rounded-lg overflow-auto max-h-96 whitespace-pre-wrap">${memoryInfo}</pre>
+                    </div>
+                    <div class="p-6 border-t border-gray-600">
+                        <div class="flex justify-end space-x-2">
+                            <button onclick="exportMemoryData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+                                <i class="fas fa-download mr-1"></i>Export Data
+                            </button>
+                            <button onclick="closeMemoryModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Store data for export
+            window.currentMemoryData = data;
+        }
+
+        function closeMemoryModal() {
+            const modal = document.getElementById('memoryModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function exportMemoryData() {
+            if (window.currentMemoryData) {
+                const blob = new Blob([JSON.stringify(window.currentMemoryData, null, 2)], { 
+                    type: 'application/json' 
+                });
+                downloadFile(blob, `memory_usage_${new Date().toISOString().split('T')[0]}.json`);
+            }
+        }
+
+        function viewSessions() {
+            // Navigate to session management
+            window.location.href = 'session-management.html';
+        }
+
+        // Enhanced notification system
         function showNotification(message, type = 'info') {
             const notification = document.getElementById('notification');
             const icon = document.getElementById('notificationIcon');
@@ -683,106 +977,49 @@
             text.textContent = message;
             notification.style.display = 'block';
             
+            // Auto-hide after duration based on type
+            const duration = type === 'error' ? 8000 : type === 'warning' ? 6000 : 4000;
             setTimeout(() => {
                 notification.style.display = 'none';
-            }, 5000);
+            }, duration);
         }
 
-        // Action handlers
-        async function clearCache() {
-            try {
-                showNotification('Clearing cache...', 'info');
-                const response = await fetch('http://localhost:8000/cache/clear', { 
-                    method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const result = await response.json();
-                console.log('Cache clear result:', result);
-                
-                if (result.status === 'success') {
-                    showNotification(`Cache cleared successfully! Freed ${result.cleared_items.redis_cache + result.cleared_items.raptor_cache + result.cleared_items.embedding_cache} items`, 'success');
-                } else {
-                    showNotification('Cache clear failed: ' + result.message, 'error');
-                }
-            } catch (error) {
-                console.error('Cache clear error:', error);
-                showNotification('Error clearing cache: ' + error.message, 'error');
-            }
+        // Utility function for file downloads
+        function downloadFile(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
-        async function optimizeRaptor() {
+        // Health check on page load
+        async function performInitialHealthCheck() {
             try {
-                showNotification('Optimizing RAPTOR...', 'info');
-                const response = await fetch('http://localhost:8000/raptor/optimize', { 
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
+                const response = await fetch(`${API_BASE_URL}/health`, {
+                    signal: AbortSignal.timeout(5000)
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const result = await response.json();
-                console.log('RAPTOR optimization result:', result);
-                
-                if (result.status === 'success') {
-                    const recommendations = result.recommendations ? ` Recommendations: ${result.recommendations.join(', ')}` : '';
-                    showNotification(`RAPTOR optimization completed!${recommendations}`, 'success');
+                if (response.ok) {
+                    const health = await response.json();
+                    console.log('Initial health check:', health);
                     
-                    // Refresh metrics after optimization
-                    setTimeout(fetchMetrics, 2000);
-                } else {
-                    showNotification('Optimization failed: ' + result.message, 'error');
+                    if (health.status !== 'healthy') {
+                        showNotification(`Server status: ${health.status}`, 'warning');
+                    }
                 }
+                
             } catch (error) {
-                console.error('RAPTOR optimization error:', error);
-                showNotification('Error optimizing RAPTOR: ' + error.message, 'error');
+                console.error('Initial health check failed:', error);
+                showNotification('Server connection test failed', 'error');
             }
         }
 
-        async function showMemoryUsage() {
-            try {
-                showNotification('Fetching memory details...', 'info');
-                const response = await fetch('http://localhost:8000/memory/usage');
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                console.log('Memory usage details:', data);
-                
-                // Create detailed memory info
-                const memoryInfo = `
-System Memory: ${data.system_memory?.used_gb?.toFixed(1)}GB / ${data.system_memory?.total_gb?.toFixed(1)}GB (${data.system_memory?.usage_percent?.toFixed(1)}%)
-Available: ${data.system_memory?.available_gb?.toFixed(1)}GB
-Process Memory: ${data.process_memory?.rss_mb?.toFixed(1)}MB (${data.process_memory?.percent?.toFixed(1)}%)
-Redis Memory: ${data.redis_memory?.used_memory_mb?.toFixed(1)}MB
-RAPTOR Tree: ${data.raptor_memory?.tree_nodes || 'N/A'} nodes
-Alerts: ${data.memory_alerts?.length || 0} active
-                `.trim();
-                
-                alert('Memory Usage Details:\n\n' + memoryInfo);
-                showNotification('Memory details displayed', 'success');
-            } catch (error) {
-                console.error('Memory usage error:', error);
-                showNotification('Error fetching memory details: ' + error.message, 'error');
-            }
-        }
-
-        function viewSessions() {
-            // Redirect to session management page
-            window.location.href = 'session-management.html';
-        }
+        // Run health check on load
+        document.addEventListener('DOMContentLoaded', performInitialHealthCheck);
     </script>
 </body>
 </html>

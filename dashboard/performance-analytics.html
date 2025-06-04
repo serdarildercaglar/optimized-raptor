@@ -123,7 +123,7 @@
             <div class="text-3xl font-bold text-blue-400" id="avgResponseTime">2.3s</div>
             <p class="text-gray-300 text-sm">AI Query Processing</p>
             <div class="mt-2 flex items-center justify-between">
-                <span class="text-xs text-gray-400">Target: &lt;5s</span>
+                <span class="text-xs text-gray-400">Target: <5s</span>
                 <span class="trend-indicator" id="responseTimeTrend">↗ +0.3s</span>
             </div>
         </div>
@@ -145,7 +145,7 @@
             <div class="text-3xl font-bold text-purple-400" id="successRate">98.7%</div>
             <p class="text-gray-300 text-sm">Successful Conversations</p>
             <div class="mt-2 flex items-center justify-between">
-                <span class="text-xs text-gray-400">Target: &gt;95%</span>
+                <span class="text-xs text-gray-400">Target: >95%</span>
                 <span class="trend-indicator" id="successRateTrend">↗ +0.2%</span>
             </div>
         </div>
@@ -239,25 +239,25 @@
                     <div class="flex justify-between items-center p-3 bg-green-900 bg-opacity-30 rounded-lg">
                         <div>
                             <div class="text-white font-medium">Best Response Time</div>
-                            <div class="text-gray-300 text-sm">Today at 14:23</div>
+                            <div class="text-gray-300 text-sm" id="bestResponseTimeTimestamp">--</div>
                         </div>
-                        <div class="text-green-400 font-bold">0.8s</div>
+                        <div class="text-green-400 font-bold" id="bestResponseTime">--s</div>
                     </div>
                     
                     <div class="flex justify-between items-center p-3 bg-blue-900 bg-opacity-30 rounded-lg">
                         <div>
                             <div class="text-white font-medium">Peak Throughput</div>
-                            <div class="text-gray-300 text-sm">Today at 10:15</div>
+                            <div class="text-gray-300 text-sm" id="peakThroughputTimestamp">--</div>
                         </div>
-                        <div class="text-blue-400 font-bold">23.2/min</div>
+                        <div class="text-blue-400 font-bold" id="peakThroughput">--/min</div>
                     </div>
                     
                     <div class="flex justify-between items-center p-3 bg-purple-900 bg-opacity-30 rounded-lg">
                         <div>
                             <div class="text-white font-medium">Cache Hit Peak</div>
-                            <div class="text-gray-300 text-sm">Today at 16:42</div>
+                            <div class="text-gray-300 text-sm" id="cacheHitPeakTimestamp">--</div>
                         </div>
-                        <div class="text-purple-400 font-bold">94.7%</div>
+                        <div class="text-purple-400 font-bold" id="cacheHitPeak">--%</div>
                     </div>
                 </div>
             </div>
@@ -345,8 +345,12 @@
         let currentChartMetric = 'response_time';
         let charts = {};
         let analyticsData = {};
+        let lastAnalyticsUpdate = null;
 
-        // Chart data
+        // API Base URL
+        const API_BASE_URL = 'http://localhost:8000';
+
+        // Chart configurations
         const chartConfigs = {
             response_time: {
                 label: 'Response Time (ms)',
@@ -462,10 +466,10 @@
             charts.rag = new Chart(ragCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Simple', 'Complex', 'Multi-step', 'Cached'],
+                    labels: ['Simple', 'Complex', 'Multi-step', 'Cached'], // These labels are static as backend doesn't provide categories
                     datasets: [{
                         label: 'Queries',
-                        data: [45, 28, 15, 54],
+                        data: [45, 28, 15, 54], // These data points are static as backend doesn't provide categories
                         backgroundColor: [
                             'rgba(59, 130, 246, 0.8)',
                             'rgba(16, 185, 129, 0.8)',
@@ -542,153 +546,490 @@
             });
         }
 
-        // Load analytics data
+        // Load real analytics data from backend
         async function loadAnalyticsData() {
             try {
-                // Fetch current metrics
-                const response = await fetch('/metrics/live');
+                showLoadingState(true);
+                
+                // Fetch performance analytics data
+                const response = await fetch(`${API_BASE_URL}/analytics/performance?time_range=${currentTimeRange}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    signal: AbortSignal.timeout(15000)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
+                console.log('Analytics data received:', data);
                 
-                // Generate historical data (simulated for demo)
-                generateHistoricalData(data);
+                // Store analytics data
+                analyticsData = data;
+                lastAnalyticsUpdate = new Date();
                 
-                // Update all visualizations
-                updateAnalyticsDashboard();
+                // Update all dashboard components
+                updateAnalyticsDashboard(data);
                 
                 document.getElementById('lastAnalysisUpdate').textContent = 
-                    'Updated: ' + new Date().toLocaleTimeString();
+                    'Updated: ' + lastAnalyticsUpdate.toLocaleTimeString();
                     
+                showLoadingState(false);
+                
             } catch (error) {
                 console.error('Failed to load analytics data:', error);
+                showLoadingState(false);
+                
+                // Show error message
+                if (error.name === 'AbortError') {
+                    showErrorMessage('Analytics request timeout - server may be overloaded');
+                } else if (error.message.includes('Failed to fetch')) {
+                    showErrorMessage('Cannot connect to RAPTOR analytics service');
+                } else {
+                    showErrorMessage(`Analytics error: ${error.message}`);
+                }
+                
+                // Fallback to cached data or demo mode
+                loadDemoAnalyticsData();
             }
         }
 
-        // Generate historical data (simulated)
-        function generateHistoricalData(currentData) {
+        // Show loading state
+        function showLoadingState(loading) {
+            const loadingElements = document.querySelectorAll('.loading-spinner');
+            const contentElements = document.querySelectorAll('.chart-container, .metric-card');
+            
+            if (loading) {
+                loadingElements.forEach(el => el.style.display = 'block');
+                contentElements.forEach(el => el.style.opacity = '0.5');
+            } else {
+                loadingElements.forEach(el => el.style.display = 'none');
+                contentElements.forEach(el => el.style.opacity = '1');
+            }
+        }
+
+        // Update dashboard with real analytics data
+        function updateAnalyticsDashboard(data) {
+            try {
+                // Update performance overview cards
+                updatePerformanceCards(data);
+                
+                // Update primary chart with real historical data
+                updatePrimaryChart(data.historical_data);
+                
+                // Update other charts
+                updateCacheChart(data.current_metrics);
+                updateRAGChart(data.historical_data, data.current_metrics); // New function call
+                updateResourceChart(data.historical_data);
+                
+                // Update insights with real data
+                updatePerformanceInsights(data.insights);
+                
+                // Update recommendations
+                updateRecommendations(data.recommendations);
+                
+            } catch (error) {
+                console.error('Error updating analytics dashboard:', error);
+            }
+        }
+
+        // Update performance cards with real data
+        function updatePerformanceCards(data) {
+            const keyMetrics = data.key_metrics || {};
+            const performanceGrade = data.performance_grade || {};
+            const historicalMetrics = data.historical_data?.metrics || {};
+
+            // Performance Grade
+            const grade = performanceGrade.grade || 'N/A';
+            const score = performanceGrade.score || 0;
+            
+            document.getElementById('overallGrade').textContent = grade;
+            document.getElementById('overallGrade').className = `performance-grade grade-${grade}`;
+            
+            const gradeDescriptions = {
+                'A': 'Excellent Performance',
+                'B': 'Good Performance', 
+                'C': 'Fair Performance',
+                'D': 'Poor Performance',
+                'F': 'Critical Issues'
+            };
+            document.getElementById('gradeDescription').textContent = gradeDescriptions[grade] || 'Unknown';
+            
+            // Response Time
+            const avgResponseTime = (keyMetrics.avg_response_time_ms / 1000).toFixed(1);
+            document.getElementById('avgResponseTime').textContent = avgResponseTime + 's';
+            
+            // Throughput
+            const throughput = keyMetrics.avg_throughput_qpm?.toFixed(1) || '0.0';
+            document.getElementById('throughput').textContent = throughput;
+            
+            // Success Rate
+            const successRate = keyMetrics.success_rate_percent?.toFixed(1) || '0.0';
+            document.getElementById('successRate').textContent = successRate + '%';
+            
+            // Calculate and display trends
+            updateTrendIndicators(data.historical_data);
+
+            // --- Top Performance Metrics (NEW/IMPROVED) ---
+            if (historicalMetrics.response_times && historicalMetrics.response_times.length > 0) {
+                const minResponseTime = Math.min(...historicalMetrics.response_times);
+                const minResponseIndex = historicalMetrics.response_times.indexOf(minResponseTime);
+                document.getElementById('bestResponseTime').textContent = (minResponseTime / 1000).toFixed(1) + 's';
+                document.getElementById('bestResponseTimeTimestamp').textContent = 
+                    new Date(data.historical_data.timestamps[minResponseIndex]).toLocaleTimeString();
+            } else {
+                document.getElementById('bestResponseTime').textContent = '--s';
+                document.getElementById('bestResponseTimeTimestamp').textContent = '--';
+            }
+
+            if (historicalMetrics.throughput && historicalMetrics.throughput.length > 0) {
+                const maxThroughput = Math.max(...historicalMetrics.throughput);
+                const maxThroughputIndex = historicalMetrics.throughput.indexOf(maxThroughput);
+                document.getElementById('peakThroughput').textContent = maxThroughput.toFixed(1) + '/min';
+                document.getElementById('peakThroughputTimestamp').textContent = 
+                    new Date(data.historical_data.timestamps[maxThroughputIndex]).toLocaleTimeString();
+            } else {
+                document.getElementById('peakThroughput').textContent = '--/min';
+                document.getElementById('peakThroughputTimestamp').textContent = '--';
+            }
+
+            if (historicalMetrics.cache_hits && historicalMetrics.cache_hits.length > 0) {
+                const maxCacheHit = Math.max(...historicalMetrics.cache_hits);
+                const maxCacheHitIndex = historicalMetrics.cache_hits.indexOf(maxCacheHit);
+                document.getElementById('cacheHitPeak').textContent = maxCacheHit.toFixed(1) + '%';
+                document.getElementById('cacheHitPeakTimestamp').textContent = 
+                    new Date(data.historical_data.timestamps[maxCacheHitIndex]).toLocaleTimeString();
+            } else {
+                document.getElementById('cacheHitPeak').textContent = '--%';
+                document.getElementById('cacheHitPeakTimestamp').textContent = '--';
+            }
+        }
+
+        // Update trend indicators from historical data
+        function updateTrendIndicators(historicalData) {
+            if (!historicalData || !historicalData.metrics) return;
+            
+            const metrics = historicalData.metrics;
+            
+            // Calculate trends (compare last 25% with first 25% of data)
+            const dataLength = metrics.response_times.length;
+            const quartile = Math.floor(dataLength / 4);
+            
+            // Response time trend
+            const earlyResponse = metrics.response_times.slice(0, Math.max(1, quartile));
+            const recentResponse = metrics.response_times.slice(-Math.max(1, quartile));
+            const responseChange = (average(recentResponse) - average(earlyResponse));
+            updateTrendElement('responseTimeTrend', responseChange, 'ms', true);
+            
+            // Throughput trend
+            const earlyThroughput = metrics.throughput.slice(0, Math.max(1, quartile));
+            const recentThroughput = metrics.throughput.slice(-Math.max(1, quartile));
+            const throughputChange = (average(recentThroughput) - average(earlyThroughput));
+            updateTrendElement('throughputTrend', throughputChange, '/min');
+            
+            // Success rate trend (from error rates)
+            const earlyErrors = metrics.error_rates.slice(0, Math.max(1, quartile));
+            const recentErrors = metrics.error_rates.slice(-Math.max(1, quartile));
+            const errorChange = (average(recentErrors) - average(earlyErrors));
+            updateTrendElement('successRateTrend', -errorChange, '%'); // Negative because lower errors = better
+        }
+
+        // Update primary chart with real historical data
+        function updatePrimaryChart(historicalData) {
+            if (!historicalData || !historicalData.metrics) return;
+            
+            const chart = charts.primary;
+            const config = chartConfigs[currentChartMetric];
+            const metrics = historicalData.metrics;
+            
+            chart.data.labels = historicalData.timestamps.map(ts => 
+                new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+            );
+            
+            chart.data.datasets[0].label = config.label;
+            chart.data.datasets[0].borderColor = config.borderColor;
+            chart.data.datasets[0].backgroundColor = config.backgroundColor;
+            
+            switch (currentChartMetric) {
+                case 'response_time':
+                    chart.data.datasets[0].data = metrics.response_times;
+                    break;
+                case 'throughput':
+                    chart.data.datasets[0].data = metrics.throughput;
+                    break;
+                case 'memory':
+                    chart.data.datasets[0].data = metrics.memory_usage;
+                    break;
+                case 'errors':
+                    chart.data.datasets[0].data = metrics.error_rates;
+                    break;
+            }
+            
+            chart.options.scales.y.max = config.yAxisMax;
+            chart.update('none');
+        }
+
+        // Update cache chart with real data
+        function updateCacheChart(currentMetrics) {
+            if (!currentMetrics || !currentMetrics.redis_metrics) return;
+            
+            const redisMetrics = currentMetrics.redis_metrics;
+            let hitRate = 85; // Default
+            
+            if (redisMetrics.cache_hit_ratio !== undefined) {
+                hitRate = Math.round(redisMetrics.cache_hit_ratio);
+            } else if (redisMetrics.keyspace_hits && redisMetrics.keyspace_misses) {
+                const hits = redisMetrics.keyspace_hits;
+                const misses = redisMetrics.keyspace_misses;
+                hitRate = Math.round((hits / (hits + misses)) * 100) || 0;
+            }
+            
+            const missRate = 100 - hitRate;
+            
+            charts.cache.data.datasets[0].data = [hitRate, missRate];
+            charts.cache.update('none');
+            
+            document.getElementById('cacheHitRate').textContent = hitRate + '%';
+            
+            // --- Update cache size (NEW) ---
+            const cacheSize = redisMetrics.used_memory_mb ? 
+                (redisMetrics.used_memory_mb / 1024).toFixed(1) + 'GB' : 
+                'N/A';
+            document.getElementById('cacheSize').textContent = cacheSize;
+        }
+
+        // Update RAG Query Analysis (NEW/IMPROVED)
+        function updateRAGChart(historicalData, currentMetrics) {
+            if (!historicalData || !historicalData.metrics || !currentMetrics) return;
+
+            // Update total RAG Searches
+            const totalRAGQueries = historicalData.metrics.rag_queries?.reduce((a, b) => a + b, 0) || 0;
+            document.getElementById('ragQueries').textContent = totalRAGQueries;
+
+            // Update Average Retrieval Time (from current_metrics for simplicity)
+            const avgRetrievalTimeMs = currentMetrics.raptor_metrics?.performance_summary?.pipeline?.avg_query_time || 0;
+            document.getElementById('avgRetrievalTime').textContent = (avgRetrievalTimeMs * 1000).toFixed(0) + 'ms';
+
+            // The 'ragChart' (doughnut) itself remains static as backend does not provide categorized RAG query types.
+            // If backend were to provide: { simple: 100, complex: 50, cached: 200 } etc., then this chart could be dynamic.
+        }
+
+
+        // Update resource utilization chart
+        function updateResourceChart(historicalData) {
+            if (!historicalData || !historicalData.metrics) return;
+            
+            const chart = charts.resource;
+            const metrics = historicalData.metrics;
+            
+            // Use memory data and simulate CPU data (could be added to backend)
+            // Making CPU simulation slightly more independent
+            const cpuData = metrics.memory_usage.map((mem, i) => 
+                Math.max(10, (mem * 0.5) + (Math.sin(i * 0.2) * 15) + (Math.random() * 5 - 2.5))
+            );
+            
+            chart.data.labels = historicalData.timestamps.map(ts => 
+                new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+            );
+            chart.data.datasets[0].data = cpuData;
+            chart.data.datasets[1].data = metrics.memory_usage;
+            chart.update('none');
+        }
+
+        // Update performance insights with real data
+        function updatePerformanceInsights(insights) {
+            const insightsContainer = document.getElementById('performanceInsights');
+            
+            if (!insights || insights.length === 0) {
+                insightsContainer.innerHTML = `
+                    <div class="p-3 bg-green-900 bg-opacity-30 rounded-lg border-l-4 border-green-500">
+                        <div class="flex items-start space-x-3">
+                            <i class="fas fa-check-circle text-green-400 mt-1"></i>
+                            <div>
+                                <h4 class="text-white font-medium text-sm">All Systems Optimal</h4>
+                                <p class="text-gray-300 text-xs mt-1">No performance issues detected in current analysis period.</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const insightsHtml = insights.map(insight => {
+                const colorMap = {
+                    'High': 'red',
+                    'Medium': 'yellow', 
+                    'Low': 'blue',
+                    'Info': 'green'
+                };
+                const color = colorMap[insight.impact] || 'blue';
+                
+                const iconMap = {
+                    'High': 'fa-exclamation-triangle',
+                    'Medium': 'fa-exclamation-circle',
+                    'Low': 'fa-info-circle',
+                    'Info': 'fa-lightbulb'
+                };
+                const icon = iconMap[insight.impact] || 'fa-info-circle';
+                
+                return `
+                    <div class="p-3 bg-${color}-900 bg-opacity-30 rounded-lg border-l-4 border-${color}-500">
+                        <div class="flex items-start space-x-3">
+                            <i class="fas ${icon} text-${color}-400 mt-1"></i>
+                            <div>
+                                <h4 class="text-white font-medium text-sm">${insight.title}</h4>
+                                <p class="text-gray-300 text-xs mt-1">${insight.description}</p>
+                                <span class="inline-block mt-2 px-2 py-1 text-xs bg-${color}-600 text-white rounded">
+                                    ${insight.impact} Impact
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            insightsContainer.innerHTML = insightsHtml;
+        }
+
+        // Update recommendations with real data
+        function updateRecommendations(recommendations) {
+            const recommendationsContainer = document.getElementById('recommendations');
+            
+            if (!recommendations || recommendations.length === 0) {
+                recommendationsContainer.innerHTML = `
+                    <div class="p-3 bg-green-900 bg-opacity-30 rounded-lg border-l-4 border-green-500">
+                        <div class="text-white font-medium text-sm">System Optimized</div>
+                        <div class="text-gray-300 text-xs mt-1">No specific recommendations at this time. Continue monitoring.</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const colors = ['blue', 'green', 'purple', 'yellow', 'red'];
+            
+            const recommendationsHtml = recommendations.slice(0, 5).map((rec, index) => {
+                const color = colors[index % colors.length];
+                
+                return `
+                    <div class="p-3 bg-${color}-900 bg-opacity-30 rounded-lg border-l-4 border-${color}-500">
+                        <div class="text-white font-medium text-sm">Recommendation ${index + 1}</div>
+                        <div class="text-gray-300 text-xs mt-1">${rec}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            recommendationsContainer.innerHTML = recommendationsHtml;
+        }
+
+        // Error handling
+        function showErrorMessage(message) {
+            const insightsContainer = document.getElementById('performanceInsights');
+            insightsContainer.innerHTML = `
+                <div class="p-3 bg-red-900 bg-opacity-30 rounded-lg border-l-4 border-red-500">
+                    <div class="flex items-start space-x-3">
+                        <i class="fas fa-exclamation-triangle text-red-400 mt-1"></i>
+                        <div>
+                            <h4 class="text-white font-medium text-sm">Analytics Service Error</h4>
+                            <p class="text-gray-300 text-xs mt-1">${message}</p>
+                            <button onclick="loadAnalyticsData()" class="mt-2 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">
+                                Retry Connection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Fallback demo data
+        function loadDemoAnalyticsData() {
+            console.log('Loading demo analytics data as fallback');
+            
+            // Generate demo data similar to original mock data
             const now = new Date();
             const points = getTimeRangePoints(currentTimeRange);
             
-            analyticsData = {
-                timestamps: [],
-                response_times: [],
-                throughput: [],
-                memory_usage: [],
-                error_rates: [],
-                cache_hits: [],
-                rag_queries: []
+            const demoData = {
+                time_range: currentTimeRange,
+                performance_grade: {
+                    grade: 'B',
+                    score: 82
+                },
+                key_metrics: {
+                    avg_response_time_ms: 2300,
+                    avg_throughput_qpm: 15.7,
+                    success_rate_percent: 98.7,
+                    peak_memory_percent: 68.3
+                },
+                historical_data: {
+                    timestamps: [],
+                    metrics: {
+                        response_times: [],
+                        throughput: [],
+                        memory_usage: [],
+                        error_rates: [],
+                        cache_hits: [],
+                        rag_queries: [] // Add rag_queries for demo
+                    }
+                },
+                insights: [
+                    {
+                        title: 'Demo Mode Active',
+                        description: 'Cannot connect to analytics service. Showing sample data.',
+                        impact: 'Info'
+                    }
+                ],
+                recommendations: [
+                    'Check RAPTOR server connection',
+                    'Verify analytics endpoints are accessible',
+                    'Enable demo mode for offline testing'
+                ],
+                current_metrics: { // Add current_metrics for demo
+                    redis_metrics: {
+                        cache_hit_ratio: 87.3,
+                        used_memory_mb: 2100 // 2.1GB
+                    },
+                    raptor_metrics: {
+                        performance_summary: {
+                            pipeline: {
+                                avg_query_time: 0.890 // 890ms
+                            }
+                        }
+                    }
+                }
             };
-
-            // Generate timestamps
-            for (let i = points - 1; i >= 0; i--) {
-                const timestamp = new Date(now.getTime() - (i * getTimeInterval(currentTimeRange)));
-                analyticsData.timestamps.push(timestamp.toLocaleTimeString());
-            }
-
-            // Generate realistic data with trends
+            
+            // Generate demo historical data
             for (let i = 0; i < points; i++) {
-                const variation = Math.random() * 0.3 - 0.15; // ±15% variation
+                const timestamp = new Date(now.getTime() - (points - i - 1) * getTimeInterval(currentTimeRange));
+                demoData.historical_data.timestamps.push(timestamp.toISOString());
                 
-                // Response times (1-5 seconds)
-                analyticsData.response_times.push(
-                    Math.max(1000, 2300 + (variation * 1000) + (Math.sin(i * 0.1) * 500))
-                );
-                
-                // Throughput (10-25 queries/min)
-                analyticsData.throughput.push(
-                    Math.max(5, 15.7 + (variation * 5) + (Math.cos(i * 0.15) * 3))
-                );
-                
-                // Memory usage (30-90%)
-                analyticsData.memory_usage.push(
-                    Math.max(30, Math.min(90, 65 + (variation * 20) + (Math.sin(i * 0.05) * 10)))
-                );
-                
-                // Error rates (0-5%)
-                analyticsData.error_rates.push(
-                    Math.max(0, Math.min(5, 1.3 + (variation * 2)))
-                );
-                
-                // Cache hits (70-95%)
-                analyticsData.cache_hits.push(
-                    Math.max(70, Math.min(95, 87 + (variation * 8)))
-                );
-                
-                // RAG queries (5-30 per interval)
-                analyticsData.rag_queries.push(
-                    Math.max(5, 18 + (variation * 10))
-                );
+                const variation = Math.random() * 0.3 - 0.15;
+                demoData.historical_data.metrics.response_times.push(Math.max(1000, 2300 + (variation * 1000)));
+                demoData.historical_data.metrics.throughput.push(Math.max(5, 15.7 + (variation * 5)));
+                demoData.historical_data.metrics.memory_usage.push(Math.max(30, Math.min(90, 65 + (variation * 20))));
+                demoData.historical_data.metrics.error_rates.push(Math.max(0, Math.min(5, 1.3 + (variation * 2))));
+                demoData.historical_data.metrics.cache_hits.push(Math.max(70, Math.min(95, 87 + (variation * 8))));
+                demoData.historical_data.metrics.rag_queries.push(Math.max(5, 18 + (variation * 10))); // Demo RAG queries
             }
+            
+            updateAnalyticsDashboard(demoData);
+            
+            document.getElementById('lastAnalysisUpdate').textContent = 'Demo Mode - ' + new Date().toLocaleTimeString();
         }
 
-        // Update dashboard with analytics
-        function updateAnalyticsDashboard() {
-            // Update performance overview cards
-            updatePerformanceCards();
-            
-            // Update primary chart
-            updatePrimaryChart();
-            
-            // Update other charts
-            updateCacheChart();
-            updateResourceChart();
-            
-            // Update insights
-            updatePerformanceInsights();
+        // Utility functions
+        function average(arr) {
+            if (arr.length === 0) return 0;
+            return arr.reduce((a, b) => a + b, 0) / arr.length;
         }
 
-        // Update performance cards
-        function updatePerformanceCards() {
-            const latestIndex = analyticsData.response_times.length - 1;
-            
-            // Calculate metrics
-            const avgResponseTime = (analyticsData.response_times[latestIndex] / 1000).toFixed(1);
-            const throughput = analyticsData.throughput[latestIndex].toFixed(1);
-            const successRate = (100 - analyticsData.error_rates[latestIndex]).toFixed(1);
-            
-            // Update displays
-            document.getElementById('avgResponseTime').textContent = avgResponseTime + 's';
-            document.getElementById('throughput').textContent = throughput;
-            document.getElementById('successRate').textContent = successRate + '%';
-            
-            // Calculate trends (compare last 5 points with previous 5)
-            updateTrendIndicators();
-            
-            // Update performance grade
-            updatePerformanceGrade(avgResponseTime, throughput, successRate);
-        }
-
-        // Update trend indicators
-        function updateTrendIndicators() {
-            const latest = analyticsData.response_times.length - 1;
-            const mid = Math.floor(latest / 2);
-            
-            // Response time trend
-            const responseTimeTrend = calculateTrend(analyticsData.response_times, mid, latest);
-            updateTrendElement('responseTimeTrend', responseTimeTrend, 'ms', true);
-            
-            // Throughput trend
-            const throughputTrend = calculateTrend(analyticsData.throughput, mid, latest);
-            updateTrendElement('throughputTrend', throughputTrend, '/min');
-            
-            // Success rate trend (inverse of error rate)
-            const errorTrend = calculateTrend(analyticsData.error_rates, mid, latest);
-            updateTrendElement('successRateTrend', -errorTrend, '%');
-        }
-
-        // Calculate trend between two periods
-        function calculateTrend(data, start, end) {
-            const recent = data.slice(Math.max(0, end - 2), end + 1);
-            const previous = data.slice(Math.max(0, start - 2), start + 1);
-            
-            const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
-            const previousAvg = previous.reduce((a, b) => a + b, 0) / previous.length;
-            
-            return recentAvg - previousAvg;
-        }
-
-        // Update trend element
         function updateTrendElement(elementId, trend, unit, isInverse = false) {
             const element = document.getElementById(elementId);
+            if (!element) return;
+            
             const abs = Math.abs(trend);
             const sign = (isInverse ? trend < 0 : trend > 0) ? '↗' : (trend === 0 ? '→' : '↘');
             const className = (isInverse ? trend < 0 : trend > 0) ? 'metric-trend-up' : 
@@ -698,204 +1039,92 @@
             element.className = `trend-indicator ${className}`;
         }
 
-        // Update performance grade
-        function updatePerformanceGrade(responseTime, throughput, successRate) {
-            let grade = 'A';
-            let description = 'Excellent Performance';
-            
-            if (responseTime > 5 || successRate < 95) {
-                grade = 'F';
-                description = 'Needs Immediate Attention';
-            } else if (responseTime > 4 || successRate < 97) {
-                grade = 'D';
-                description = 'Poor Performance';
-            } else if (responseTime > 3 || successRate < 98) {
-                grade = 'C';
-                description = 'Fair Performance';
-            } else if (responseTime > 2.5 || successRate < 99) {
-                grade = 'B';
-                description = 'Good Performance';
-            }
-            
-            const gradeEl = document.getElementById('overallGrade');
-            gradeEl.textContent = grade;
-            gradeEl.className = `performance-grade grade-${grade}`;
-            document.getElementById('gradeDescription').textContent = description;
-        }
-
-        // Update primary chart
-        function updatePrimaryChart() {
-            const chart = charts.primary;
-            const config = chartConfigs[currentChartMetric];
-            
-            chart.data.labels = analyticsData.timestamps;
-            chart.data.datasets[0].label = config.label;
-            chart.data.datasets[0].borderColor = config.borderColor;
-            chart.data.datasets[0].backgroundColor = config.backgroundColor;
-            
-            switch (currentChartMetric) {
-                case 'response_time':
-                    chart.data.datasets[0].data = analyticsData.response_times;
-                    break;
-                case 'throughput':
-                    chart.data.datasets[0].data = analyticsData.throughput;
-                    break;
-                case 'memory':
-                    chart.data.datasets[0].data = analyticsData.memory_usage;
-                    break;
-                case 'errors':
-                    chart.data.datasets[0].data = analyticsData.error_rates;
-                    break;
-            }
-            
-            chart.options.scales.y.max = config.yAxisMax;
-            chart.update('none');
-        }
-
-        // Update cache chart
-        function updateCacheChart() {
-            const latestHitRate = analyticsData.cache_hits[analyticsData.cache_hits.length - 1];
-            const hitRate = Math.round(latestHitRate);
-            const missRate = 100 - hitRate;
-            
-            charts.cache.data.datasets[0].data = [hitRate, missRate];
-            charts.cache.update('none');
-            
-            document.getElementById('cacheHitRate').textContent = hitRate + '%';
-        }
-
-        // Update resource chart
-        function updateResourceChart() {
-            const chart = charts.resource;
-            
-            // Generate CPU data (lower than memory)
-            const cpuData = analyticsData.memory_usage.map(mem => Math.max(10, mem * 0.6 + (Math.random() * 10 - 5)));
-            
-            chart.data.labels = analyticsData.timestamps;
-            chart.data.datasets[0].data = cpuData;
-            chart.data.datasets[1].data = analyticsData.memory_usage;
-            chart.update('none');
-        }
-
-        // Update performance insights
-        function updatePerformanceInsights() {
-            const insights = [
-                {
-                    icon: 'fas fa-rocket',
-                    title: 'Response Time Optimization',
-                    description: 'Average response time is within target range. Consider enabling early termination for 15% improvement.',
-                    impact: 'Medium',
-                    color: 'blue'
-                },
-                {
-                    icon: 'fas fa-memory',
-                    title: 'Memory Usage Trend',
-                    description: 'Memory usage shows gradual increase. Schedule cache cleanup during low-traffic periods.',
-                    impact: 'Low',
-                    color: 'yellow'
-                },
-                {
-                    icon: 'fas fa-chart-line',
-                    title: 'Throughput Analysis',
-                    description: 'Current throughput is optimal. Peak capacity utilization: 68%.',
-                    impact: 'Info',
-                    color: 'green'
-                }
-            ];
-            
-            const insightsHtml = insights.map(insight => `
-                <div class="p-3 bg-${insight.color}-900 bg-opacity-30 rounded-lg border-l-4 border-${insight.color}-500">
-                    <div class="flex items-start space-x-3">
-                        <i class="${insight.icon} text-${insight.color}-400 mt-1"></i>
-                        <div>
-                            <h4 class="text-white font-medium text-sm">${insight.title}</h4>
-                            <p class="text-gray-300 text-xs mt-1">${insight.description}</p>
-                            <span class="inline-block mt-2 px-2 py-1 text-xs bg-${insight.color}-600 text-white rounded">
-                                ${insight.impact} Impact
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-            
-            document.getElementById('performanceInsights').innerHTML = insightsHtml;
-        }
-
-        // Utility functions
         function getTimeRangePoints(range) {
             const points = {
-                '1h': 60,    // 1 minute intervals
-                '6h': 72,    // 5 minute intervals
-                '24h': 96,   // 15 minute intervals
-                '7d': 168,   // 1 hour intervals
-                '30d': 120   // 6 hour intervals
+                '1h': 60,
+                '6h': 72, 
+                '24h': 96,
+                '7d': 168,
+                '30d': 120
             };
             return points[range] || 60;
         }
 
         function getTimeInterval(range) {
             const intervals = {
-                '1h': 60 * 1000,           // 1 minute
-                '6h': 5 * 60 * 1000,       // 5 minutes
-                '24h': 15 * 60 * 1000,     // 15 minutes
-                '7d': 60 * 60 * 1000,      // 1 hour
-                '30d': 6 * 60 * 60 * 1000  // 6 hours
+                '1h': 60 * 1000,
+                '6h': 5 * 60 * 1000,
+                '24h': 15 * 60 * 1000, 
+                '7d': 60 * 60 * 1000,
+                '30d': 6 * 60 * 60 * 1000
             };
             return intervals[range] || 60 * 1000;
         }
 
-        // Event handlers
+        // Event handlers with backend integration
         function setTimeRange(range) {
-            // Update active button
             document.querySelectorAll('.time-selector').forEach(btn => {
                 btn.classList.remove('active');
             });
             document.getElementById(`btn-${range}`).classList.add('active');
             
             currentTimeRange = range;
-            loadAnalyticsData();
+            loadAnalyticsData(); // Load real data for new time range
         }
 
         function setChartMetric(metric) {
-            // Update active button
             document.querySelectorAll('.chart-metric-btn').forEach(btn => {
                 btn.className = 'chart-metric-btn px-3 py-1 rounded text-sm border border-gray-600 text-gray-300';
             });
             document.getElementById(`metric-${metric}`).className = 'chart-metric-btn px-3 py-1 rounded text-sm bg-blue-600 text-white';
             
             currentChartMetric = metric;
-            updatePrimaryChart();
+            if (analyticsData.historical_data) {
+                updatePrimaryChart(analyticsData.historical_data);
+            }
         }
 
+        // Export functions with real data
         function exportData(format) {
+            if (!analyticsData.historical_data) {
+                alert('No analytics data available to export');
+                return;
+            }
+            
             const data = {
                 timestamp: new Date().toISOString(),
                 timeRange: currentTimeRange,
-                metrics: analyticsData
+                performance_grade: analyticsData.performance_grade,
+                key_metrics: analyticsData.key_metrics,
+                historical_data: analyticsData.historical_data,
+                insights: analyticsData.insights,
+                recommendations: analyticsData.recommendations
             };
             
             if (format === 'json') {
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                downloadFile(blob, `raptor_analytics_${currentTimeRange}.json`);
+                downloadFile(blob, `raptor_analytics_${currentTimeRange}_${new Date().toISOString().split('T')[0]}.json`);
             } else if (format === 'csv') {
                 const csv = convertToCSV(data);
                 const blob = new Blob([csv], { type: 'text/csv' });
-                downloadFile(blob, `raptor_analytics_${currentTimeRange}.csv`);
+                downloadFile(blob, `raptor_analytics_${currentTimeRange}_${new Date().toISOString().split('T')[0]}.csv`);
             }
         }
 
         function convertToCSV(data) {
-            const headers = ['timestamp', 'response_time_ms', 'throughput_qpm', 'memory_percent', 'error_rate_percent', 'cache_hit_percent'];
+            const headers = ['timestamp', 'response_time_ms', 'throughput_qpm', 'memory_percent', 'error_rate_percent', 'cache_hit_percent', 'rag_queries']; // Added rag_queries
             const rows = [headers.join(',')];
             
-            for (let i = 0; i < data.metrics.timestamps.length; i++) {
+            const metrics = data.historical_data.metrics;
+            for (let i = 0; i < data.historical_data.timestamps.length; i++) {
                 const row = [
-                    data.metrics.timestamps[i],
-                    data.metrics.response_times[i],
-                    data.metrics.throughput[i],
-                    data.metrics.memory_usage[i],
-                    data.metrics.error_rates[i],
-                    data.metrics.cache_hits[i]
+                    data.historical_data.timestamps[i],
+                    metrics.response_times[i],
+                    metrics.throughput[i],
+                    metrics.memory_usage[i],
+                    metrics.error_rates[i],
+                    metrics.cache_hits[i],
+                    metrics.rag_queries[i] // Added rag_queries
                 ];
                 rows.push(row.join(','));
             }
@@ -921,7 +1150,10 @@
                 optimization: 'Creating detailed optimization guide with actionable recommendations...'
             };
             
-            alert(reports[type] + '\n\nThis feature will generate a detailed PDF report with analytics data.');
+            alert(reports[type] + '\n\nThis feature will generate a detailed PDF report with real analytics data.');
+            
+            // Could implement actual report generation by calling backend
+            // fetch(`${API_BASE_URL}/reports/generate`, { method: 'POST', body: JSON.stringify({type, timeRange: currentTimeRange}) })
         }
     </script>
 </body>
