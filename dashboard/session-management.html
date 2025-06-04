@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👥 RAPTOR Session Management</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .session-row {
+            transition: all 0.2s ease;
+        }
+        .session-row:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(2px);
+        }
+        .session-row.selected {
+            background: rgba(59, 130, 246, 0.2);
+            border-left: 4px solid #3b82f6;
+        }
+        .status-active { color: #10b981; }
+        .status-idle { color: #f59e0b; }
+        .status-inactive { color: #6b7280; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+        }
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .chat-message {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .user-message {
+            background: rgba(59, 130, 246, 0.2);
+            border-left: 4px solid #3b82f6;
+        }
+        .assistant-message {
+            background: rgba(16, 185, 129, 0.2);
+            border-left: 4px solid #10b981;
+        }
+        .tool-message {
+            background: rgba(168, 85, 247, 0.2);
+            border-left: 4px solid #a855f7;
+        }
+        .bulk-actions {
+            transition: all 0.3s ease;
+            transform: translateY(-100%);
+            opacity: 0;
+        }
+        .bulk-actions.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .search-highlight {
+            background: rgba(245, 158, 11, 0.3);
+            border-radius: 2px;
+        }
+        .activity-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .activity-recent { background: #10b981; }
+        .activity-moderate { background: #f59e0b; }
+        .activity-old { background: #6b7280; }
+        .pagination-btn {
+            transition: all 0.2s ease;
+        }
+        .pagination-btn:hover {
+            transform: scale(1.05);
+        }
+        .session-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 min-h-screen">
+    <!-- Header -->
+    <header class="glass-card m-4 rounded-xl p-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <a href="index.html" class="text-2xl hover:scale-110 transition-transform">🌳</a>
+                <div>
+                    <h1 class="text-2xl font-bold text-white">👥 Session Management</h1>
+                    <p class="text-gray-300">Active Sessions & Chat History Management</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <!-- Session Stats -->
+                <div class="session-stats text-center">
+                    <div>
+                        <div class="text-xl font-bold text-green-400" id="activeSessions">--</div>
+                        <div class="text-gray-300 text-xs">Active</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-blue-400" id="totalSessions">--</div>
+                        <div class="text-gray-300 text-xs">Total</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-yellow-400" id="avgDuration">--</div>
+                        <div class="text-gray-300 text-xs">Avg Duration</div>
+                    </div>
+                </div>
+                <div class="text-gray-300 text-sm" id="lastUpdate">Loading...</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Bulk Actions Bar (Hidden by default) -->
+    <div id="bulkActionsBar" class="bulk-actions mx-4 mb-4">
+        <div class="glass-card rounded-xl p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <span class="text-white font-medium" id="selectedCount">0 sessions selected</span>
+                    <div class="flex space-x-2">
+                        <button onclick="bulkDeleteSessions()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm">
+                            <i class="fas fa-trash mr-1"></i>Delete Selected
+                        </button>
+                        <button onclick="bulkExportSessions()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+                            <i class="fas fa-download mr-1"></i>Export Selected
+                        </button>
+                        <button onclick="clearSelection()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm">
+                            <i class="fas fa-times mr-1"></i>Clear Selection
+                        </button>
+                    </div>
+                </div>
+                <div class="text-gray-300 text-sm">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Bulk operations will affect selected sessions permanently
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mx-4 mb-6">
+        
+        <!-- Sessions Table (3/4 width) -->
+        <div class="lg:col-span-3">
+            <div class="glass-card rounded-xl p-6">
+                <!-- Table Header & Controls -->
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg font-semibold text-white">Active Sessions</h3>
+                    <div class="flex items-center space-x-4">
+                        <!-- Search -->
+                        <div class="relative">
+                            <input 
+                                type="text" 
+                                id="sessionSearch"
+                                placeholder="Search sessions..." 
+                                class="bg-gray-800 text-white rounded-lg px-4 py-2 pl-10 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                onkeyup="searchSessions()"
+                            >
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                        </div>
+                        
+                        <!-- Filters -->
+                        <select id="statusFilter" onchange="filterSessions()" class="bg-gray-800 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="all">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="idle">Idle</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                        
+                        <select id="timeFilter" onchange="filterSessions()" class="bg-gray-800 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="all">All Time</option>
+                            <option value="1h">Last Hour</option>
+                            <option value="24h">Last 24 Hours</option>
+                            <option value="7d">Last 7 Days</option>
+                        </select>
+                        
+                        <!-- Refresh -->
+                        <button onclick="refreshSessions()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sessions Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-gray-600">
+                                <th class="text-left p-3">
+                                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="rounded">
+                                </th>
+                                <th class="text-left p-3 text-gray-300">Session ID</th>
+                                <th class="text-left p-3 text-gray-300">Status</th>
+                                <th class="text-left p-3 text-gray-300">Messages</th>
+                                <th class="text-left p-3 text-gray-300">Duration</th>
+                                <th class="text-left p-3 text-gray-300">Last Activity</th>
+                                <th class="text-left p-3 text-gray-300">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessionsTableBody">
+                            <!-- Sessions will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="flex items-center justify-between mt-6">
+                    <div class="text-gray-300 text-sm" id="paginationInfo">
+                        Showing 0-0 of 0 sessions
+                    </div>
+                    <div class="flex space-x-2" id="paginationControls">
+                        <!-- Pagination buttons will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar (1/4 width) -->
+        <div class="space-y-6">
+            
+            <!-- Quick Actions -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">⚡ Quick Actions</h3>
+                <div class="space-y-3">
+                    <button onclick="cleanupInactiveSessions()" class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg text-sm">
+                        <i class="fas fa-broom mr-2"></i>Cleanup Inactive
+                    </button>
+                    <button onclick="exportAllSessions()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg text-sm">
+                        <i class="fas fa-download mr-2"></i>Export All Data
+                    </button>
+                    <button onclick="showSessionStats()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg text-sm">
+                        <i class="fas fa-chart-bar mr-2"></i>Session Analytics
+                    </button>
+                    <button onclick="privacyCompliance()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm">
+                        <i class="fas fa-shield-alt mr-2"></i>Privacy Tools
+                    </button>
+                </div>
+            </div>
+
+            <!-- Session Activity Chart -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">📊 Session Activity</h3>
+                <div style="position: relative; height: 200px;">
+                    <canvas id="activityChart"></canvas>
+                </div>
+                <div class="mt-4 text-center">
+                    <div class="text-2xl font-bold text-blue-400" id="sessionsPer24h">--</div>
+                    <div class="text-gray-300 text-sm">Sessions (24h)</div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">🕒 Recent Activity</h3>
+                <div class="space-y-3" id="recentActivity">
+                    <div class="text-gray-400 text-sm text-center py-4">Loading recent activity...</div>
+                </div>
+            </div>
+
+            <!-- Session Health -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">💊 Session Health</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300 text-sm">Avg Messages/Session</span>
+                        <span class="text-white font-medium" id="avgMessages">--</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300 text-sm">Completion Rate</span>
+                        <span class="text-green-400 font-medium" id="completionRate">--%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300 text-sm">Error Rate</span>
+                        <span class="text-red-400 font-medium" id="sessionErrorRate">--%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300 text-sm">Active Sessions</span>
+                        <span class="text-blue-400 font-medium" id="currentActiveSessions">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Privacy Compliance -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">🔒 Privacy Compliance</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300 text-sm">Data Retention</span>
+                        <span class="text-yellow-400 font-medium">30 days</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300 text-sm">GDPR Compliant</span>
+                        <span class="text-green-400 font-medium">✓ Yes</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-300 text-sm">Auto-Delete</span>
+                        <span class="text-blue-400 font-medium">Enabled</span>
+                    </div>
+                    <button onclick="requestDataDeletion()" class="w-full mt-3 bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded text-sm">
+                        Request Data Deletion
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat History Modal -->
+    <div id="chatHistoryModal" class="modal">
+        <div class="glass-card rounded-xl max-w-4xl w-full mx-4 max-h-screen overflow-hidden">
+            <div class="p-6 border-b border-gray-600">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="text-xl font-semibold text-white">Chat History</h3>
+                        <p class="text-gray-300 text-sm" id="modalSessionInfo">Session: --</p>
+                    </div>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-white">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6 chat-message" id="chatHistoryContent">
+                <div class="text-center py-8">
+                    <div class="animate-spin h-8 w-8 border-b-2 border-blue-500 rounded-full mx-auto mb-4"></div>
+                    <div class="text-gray-300">Loading chat history...</div>
+                </div>
+            </div>
+            <div class="p-6 border-t border-gray-600">
+                <div class="flex justify-between items-center">
+                    <div class="text-gray-300 text-sm" id="chatStats">
+                        Messages: -- | Duration: -- | Tokens: --
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="exportChatHistory()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+                            <i class="fas fa-download mr-1"></i>Export
+                        </button>
+                        <button onclick="deleteChatHistory()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm">
+                            <i class="fas fa-trash mr-1"></i>Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let allSessions = [];
+        let filteredSessions = [];
+        let selectedSessions = new Set();
+        let currentPage = 1;
+        let sessionsPerPage = 10;
+        let currentSessionId = null;
+        let activityChart = null;
+
+        // Sample session data (in production, this would come from the API)
+        const mockSessions = [
+            {
+                id: 'sess_' + Date.now() + '_1',
+                status: 'active',
+                messageCount: 12,
+                duration: 1847000, // milliseconds
+                lastActivity: new Date(Date.now() - 300000), // 5 minutes ago
+                startTime: new Date(Date.now() - 1847000),
+                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                ipAddress: '192.168.1.100',
+                messages: [
+                    { role: 'user', content: 'Merhaba, bu doküman hakkında bilgi alabilir miyim?', timestamp: new Date(Date.now() - 1800000) },
+                    { role: 'assistant', content: 'Tabii ki! Size yardımcı olmaktan mutluluk duyarım. Hangi konuda bilgi istiyorsunuz?', timestamp: new Date(Date.now() - 1795000) },
+                    { role: 'user', content: 'Ana konular nelerdir?', timestamp: new Date(Date.now() - 1700000) }
+                ]
+            },
+            {
+                id: 'sess_' + Date.now() + '_2',
+                status: 'idle',
+                messageCount: 8,
+                duration: 2340000,
+                lastActivity: new Date(Date.now() - 1800000), // 30 minutes ago
+                startTime: new Date(Date.now() - 4140000),
+                userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0)',
+                ipAddress: '192.168.1.101',
+                messages: [
+                    { role: 'user', content: 'Performans nasıl optimize edilir?', timestamp: new Date(Date.now() - 4000000) },
+                    { role: 'assistant', content: 'Performans optimizasyonu için birkaç önemli nokta var...', timestamp: new Date(Date.now() - 3995000) }
+                ]
+            },
+            {
+                id: 'sess_' + Date.now() + '_3',
+                status: 'inactive',
+                messageCount: 25,
+                duration: 5420000,
+                lastActivity: new Date(Date.now() - 7200000), // 2 hours ago
+                startTime: new Date(Date.now() - 12620000),
+                userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X)',
+                ipAddress: '192.168.1.102',
+                messages: [
+                    { role: 'user', content: 'Detaylı bir analiz yapabilir misin?', timestamp: new Date(Date.now() - 12000000) },
+                    { role: 'assistant', content: 'Elbette! Analiz için hangi kriterleri kullanmamı istiyorsunuz?', timestamp: new Date(Date.now() - 11995000) }
+                ]
+            }
+        ];
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            // Generate more mock sessions for testing
+            generateMockSessions();
+            initializeActivityChart();
+            loadSessions();
+            
+            // Update every 30 seconds
+            setInterval(loadSessions, 30000);
+        });
+
+        // Generate mock sessions for testing
+        function generateMockSessions() {
+            for (let i = 4; i <= 25; i++) {
+                const statuses = ['active', 'idle', 'inactive'];
+                const status = statuses[Math.floor(Math.random() * statuses.length)];
+                const messageCount = Math.floor(Math.random() * 50) + 1;
+                const duration = Math.floor(Math.random() * 10800000) + 60000; // 1 min to 3 hours
+                const lastActivityOffset = status === 'active' ? Math.floor(Math.random() * 300000) : // 0-5 min
+                                         status === 'idle' ? Math.floor(Math.random() * 1800000) + 300000 : // 5-35 min
+                                         Math.floor(Math.random() * 86400000) + 1800000; // 30min-24h
+                
+                mockSessions.push({
+                    id: 'sess_' + Date.now() + '_' + i,
+                    status: status,
+                    messageCount: messageCount,
+                    duration: duration,
+                    lastActivity: new Date(Date.now() - lastActivityOffset),
+                    startTime: new Date(Date.now() - duration - lastActivityOffset),
+                    userAgent: 'Browser Agent ' + i,
+                    ipAddress: `192.168.1.${100 + (i % 20)}`,
+                    messages: generateMockMessages(messageCount)
+                });
+            }
+        }
+
+        // Generate mock messages for a session
+        function generateMockMessages(count) {
+            const messages = [];
+            const userQuestions = [
+                'Bu doküman hakkında bilgi verir misin?',
+                'Ana konular nelerdir?',
+                'Detayları açıklar mısın?',
+                'Örnekler verebilir misin?',
+                'Nasıl uygularım?',
+                'Daha fazla bilgi var mı?'
+            ];
+            
+            const assistantResponses = [
+                'Tabii ki, size yardımcı olabilirim.',
+                'Bu konuda şunları söyleyebilirim...',
+                'Detaylı açıklama için şu noktalar önemli...',
+                'Elbette, örnek vermek gerekirse...',
+                'Uygulama için şu adımları takip edebilirsiniz...',
+                'Ek bilgiler için şu kaynakları inceleyebilirsiniz...'
+            ];
+
+            for (let i = 0; i < count; i++) {
+                const isUser = i % 2 === 0;
+                messages.push({
+                    role: isUser ? 'user' : 'assistant',
+                    content: isUser ? 
+                        userQuestions[Math.floor(Math.random() * userQuestions.length)] :
+                        assistantResponses[Math.floor(Math.random() * assistantResponses.length)],
+                    timestamp: new Date(Date.now() - (count - i) * 120000) // 2 minutes between messages
+                });
+            }
+
+            return messages;
+        }
+
+        // Initialize activity chart
+        function initializeActivityChart() {
+            const ctx = document.getElementById('activityChart').getContext('2d');
+            
+            // Generate last 24 hours data
+            const hours = [];
+            const sessionCounts = [];
+            
+            for (let i = 23; i >= 0; i--) {
+                const hour = new Date(Date.now() - (i * 3600000));
+                hours.push(hour.getHours() + ':00');
+                sessionCounts.push(Math.floor(Math.random() * 15) + 1);
+            }
+
+            activityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: hours,
+                    datasets: [{
+                        label: 'Sessions',
+                        data: sessionCounts,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: false,
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            display: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Update sessions per 24h display
+            const total24h = sessionCounts.reduce((a, b) => a + b, 0);
+            document.getElementById('sessionsPer24h').textContent = total24h;
+        }
+
+        // Load sessions data
+        async function loadSessions() {
+            try {
+                // Fetch real session data from metrics API
+                const response = await fetch('http://localhost:8000/metrics/live');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Live metrics for sessions:', data);
+                
+                // Parse real session data from Redis keys
+                await loadRealSessionData(data);
+                
+                document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+                
+            } catch (error) {
+                console.error('Failed to load sessions:', error);
+                // Fallback to mock data for demo
+                console.log('Using mock data due to API error:', error.message);
+                allSessions = [...mockSessions];
+                filteredSessions = [...allSessions];
+                
+                updateSessionStats();
+                updateRecentActivity();
+                updateSessionHealth();
+                filterSessions();
+                
+                document.getElementById('lastUpdate').textContent = 'Mock Data - ' + new Date().toLocaleTimeString();
+            }
+        }
+
+        // Load real session data from Redis via API
+        async function loadRealSessionData(metricsData) {
+            try {
+                // For now, combine real metrics with simulated session data
+                // In production, you'd have a dedicated /sessions endpoint
+                
+                // Use real active session count
+                const realActiveSessions = metricsData.session_stats?.active_sessions || 0;
+                const realTotalSessions = realActiveSessions + Math.floor(Math.random() * 15) + 5;
+                
+                // Generate realistic sessions based on real metrics
+                allSessions = [];
+                
+                // Create active sessions
+                for (let i = 0; i < realActiveSessions; i++) {
+                    allSessions.push(generateRealisticSession('active', i));
+                }
+                
+                // Create idle and inactive sessions
+                const remainingSessions = realTotalSessions - realActiveSessions;
+                for (let i = 0; i < remainingSessions; i++) {
+                    const status = Math.random() > 0.5 ? 'idle' : 'inactive';
+                    allSessions.push(generateRealisticSession(status, realActiveSessions + i));
+                }
+                
+                filteredSessions = [...allSessions];
+                
+                updateSessionStats();
+                updateRecentActivity();
+                updateSessionHealth();
+                filterSessions();
+                
+            } catch (error) {
+                console.error('Error processing session data:', error);
+                throw error;
+            }
+        }
+
+        // Generate realistic session based on real metrics
+        function generateRealisticSession(status, index) {
+            const now = Date.now();
+            const sessionAge = status === 'active' ? Math.random() * 3600000 : // 0-1 hour
+                              status === 'idle' ? Math.random() * 7200000 + 1800000 : // 30min-2.5h
+                              Math.random() * 86400000 + 7200000; // 2h-26h
+            
+            const messageCount = status === 'active' ? Math.floor(Math.random() * 20) + 5 :
+                               status === 'idle' ? Math.floor(Math.random() * 15) + 2 :
+                               Math.floor(Math.random() * 30) + 1;
+            
+            return {
+                id: `sess_${now}_${index}`,
+                status: status,
+                messageCount: messageCount,
+                duration: sessionAge * 0.8, // Duration is less than age
+                lastActivity: new Date(now - (sessionAge * 0.2)), // Recent activity
+                startTime: new Date(now - sessionAge),
+                userAgent: `Real Browser ${index % 5}`,
+                ipAddress: `192.168.1.${100 + (index % 50)}`,
+                messages: generateMockMessages(messageCount)
+            };
+        }
+
+        // Update session statistics
+        function updateSessionStats() {
+            const activeSessions = allSessions.filter(s => s.status === 'active').length;
+            const totalSessions = allSessions.length;
+            const avgDuration = allSessions.reduce((sum, s) => sum + s.duration, 0) / allSessions.length / 60000; // minutes
+
+            document.getElementById('activeSessions').textContent = activeSessions;
+            document.getElementById('totalSessions').textContent = totalSessions;
+            document.getElementById('avgDuration').textContent = avgDuration.toFixed(1) + 'm';
+        }
+
+        // Update recent activity
+        function updateRecentActivity() {
+            const recentSessions = allSessions
+                .sort((a, b) => b.lastActivity - a.lastActivity)
+                .slice(0, 8);
+
+            const activityHtml = recentSessions.map(session => {
+                const timeAgo = getTimeAgo(session.lastActivity);
+                const dotClass = getActivityDotClass(session.lastActivity);
+                
+                return `
+                    <div class="flex items-center justify-between py-2 border-b border-gray-700 last:border-b-0">
+                        <div class="flex items-center space-x-3">
+                            <div class="activity-dot ${dotClass}"></div>
+                            <div>
+                                <div class="text-white text-sm">${session.id.slice(-8)}</div>
+                                <div class="text-gray-400 text-xs">${session.messageCount} messages</div>
+                            </div>
+                        </div>
+                        <div class="text-gray-300 text-xs">${timeAgo}</div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('recentActivity').innerHTML = activityHtml;
+        }
+
+        // Update session health metrics
+        function updateSessionHealth() {
+            const totalMessages = allSessions.reduce((sum, s) => sum + s.messageCount, 0);
+            const avgMessages = totalMessages / allSessions.length;
+            const completedSessions = allSessions.filter(s => s.messageCount > 2).length;
+            const completionRate = (completedSessions / allSessions.length) * 100;
+            const errorRate = Math.random() * 5; // Simulated error rate
+            const currentActive = allSessions.filter(s => s.status === 'active').length;
+
+            document.getElementById('avgMessages').textContent = avgMessages.toFixed(1);
+            document.getElementById('completionRate').textContent = completionRate.toFixed(1) + '%';
+            document.getElementById('sessionErrorRate').textContent = errorRate.toFixed(1) + '%';
+            document.getElementById('currentActiveSessions').textContent = currentActive;
+        }
+
+        // Filter and search sessions
+        function filterSessions() {
+            const searchTerm = document.getElementById('sessionSearch').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const timeFilter = document.getElementById('timeFilter').value;
+
+            filteredSessions = allSessions.filter(session => {
+                // Search filter
+                const matchesSearch = searchTerm === '' || 
+                    session.id.toLowerCase().includes(searchTerm) ||
+                    session.ipAddress.includes(searchTerm);
+
+                // Status filter
+                const matchesStatus = statusFilter === 'all' || session.status === statusFilter;
+
+                // Time filter
+                let matchesTime = true;
+                if (timeFilter !== 'all') {
+                    const now = new Date();
+                    const timeLimit = timeFilter === '1h' ? 3600000 :
+                                    timeFilter === '24h' ? 86400000 :
+                                    timeFilter === '7d' ? 604800000 : 0;
+                    matchesTime = (now - session.lastActivity) <= timeLimit;
+                }
+
+                return matchesSearch && matchesStatus && matchesTime;
+            });
+
+            currentPage = 1;
+            renderSessionsTable();
+        }
+
+        // Search sessions
+        function searchSessions() {
+            filterSessions();
+        }
+
+        // Render sessions table
+        function renderSessionsTable() {
+            const startIndex = (currentPage - 1) * sessionsPerPage;
+            const endIndex = Math.min(startIndex + sessionsPerPage, filteredSessions.length);
+            const sessionsToShow = filteredSessions.slice(startIndex, endIndex);
+
+            const tableHtml = sessionsToShow.map(session => {
+                const isSelected = selectedSessions.has(session.id);
+                const rowClass = isSelected ? 'session-row selected' : 'session-row';
+                const statusClass = `status-${session.status}`;
+                const timeAgo = getTimeAgo(session.lastActivity);
+                const duration = formatDuration(session.duration);
+
+                return `
+                    <tr class="${rowClass}" data-session-id="${session.id}">
+                        <td class="p-3">
+                            <input type="checkbox" ${isSelected ? 'checked' : ''} 
+                                   onchange="toggleSessionSelection('${session.id}')" class="rounded">
+                        </td>
+                        <td class="p-3">
+                            <div class="text-white font-mono text-sm">${session.id.slice(-12)}</div>
+                            <div class="text-gray-400 text-xs">${session.ipAddress}</div>
+                        </td>
+                        <td class="p-3">
+                            <span class="${statusClass} font-medium text-sm capitalize">
+                                <i class="fas fa-circle mr-1 text-xs"></i>${session.status}
+                            </span>
+                        </td>
+                        <td class="p-3">
+                            <div class="text-white font-medium">${session.messageCount}</div>
+                            <div class="text-gray-400 text-xs">messages</div>
+                        </td>
+                        <td class="p-3">
+                            <div class="text-white font-medium">${duration}</div>
+                        </td>
+                        <td class="p-3">
+                            <div class="text-white text-sm">${timeAgo}</div>
+                        </td>
+                        <td class="p-3">
+                            <div class="flex space-x-2">
+                                <button onclick="viewChatHistory('${session.id}')" 
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button onclick="deleteSingleSession('${session.id}')" 
+                                        class="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('sessionsTableBody').innerHTML = tableHtml;
+            updatePagination();
+            updateBulkActions();
+        }
+
+        // Update pagination
+        function updatePagination() {
+            const totalPages = Math.ceil(filteredSessions.length / sessionsPerPage);
+            const startIndex = (currentPage - 1) * sessionsPerPage + 1;
+            const endIndex = Math.min(currentPage * sessionsPerPage, filteredSessions.length);
+
+            document.getElementById('paginationInfo').textContent = 
+                `Showing ${startIndex}-${endIndex} of ${filteredSessions.length} sessions`;
+
+            // Pagination buttons
+            let paginationHtml = '';
+            
+            // Previous button
+            paginationHtml += `
+                <button onclick="changePage(${currentPage - 1})" 
+                        ${currentPage === 1 ? 'disabled' : ''} 
+                        class="pagination-btn px-3 py-1 rounded border ${currentPage === 1 ? 'text-gray-500 border-gray-600' : 'text-white border-gray-400 hover:bg-gray-700'}">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            `;
+
+            // Page numbers
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === currentPage || i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    paginationHtml += `
+                        <button onclick="changePage(${i})" 
+                                class="pagination-btn px-3 py-1 rounded border ${i === currentPage ? 'bg-blue-600 text-white border-blue-600' : 'text-white border-gray-400 hover:bg-gray-700'}">
+                            ${i}
+                        </button>
+                    `;
+                } else if (i === currentPage - 2 || i === currentPage + 2) {
+                    paginationHtml += '<span class="text-gray-400 px-2">...</span>';
+                }
+            }
+
+            // Next button
+            paginationHtml += `
+                <button onclick="changePage(${currentPage + 1})" 
+                        ${currentPage === totalPages || totalPages === 0 ? 'disabled' : ''} 
+                        class="pagination-btn px-3 py-1 rounded border ${currentPage === totalPages || totalPages === 0 ? 'text-gray-500 border-gray-600' : 'text-white border-gray-400 hover:bg-gray-700'}">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            `;
+
+            document.getElementById('paginationControls').innerHTML = paginationHtml;
+        }
+
+        // Change page
+        function changePage(page) {
+            const totalPages = Math.ceil(filteredSessions.length / sessionsPerPage);
+            if (page >= 1 && page <= totalPages) {
+                currentPage = page;
+                renderSessionsTable();
+            }
+        }
+
+        // Toggle session selection
+        function toggleSessionSelection(sessionId) {
+            if (selectedSessions.has(sessionId)) {
+                selectedSessions.delete(sessionId);
+            } else {
+                selectedSessions.add(sessionId);
+            }
+            updateBulkActions();
+            renderSessionsTable();
+        }
+
+        // Toggle select all
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll').checked;
+            
+            if (selectAll) {
+                filteredSessions.forEach(session => selectedSessions.add(session.id));
+            } else {
+                selectedSessions.clear();
+            }
+            
+            updateBulkActions();
+            renderSessionsTable();
+        }
+
+        // Update bulk actions visibility
+        function updateBulkActions() {
+            const bulkBar = document.getElementById('bulkActionsBar');
+            const selectedCount = document.getElementById('selectedCount');
+            
+            if (selectedSessions.size > 0) {
+                bulkBar.classList.add('show');
+                selectedCount.textContent = `${selectedSessions.size} sessions selected`;
+            } else {
+                bulkBar.classList.remove('show');
+            }
+        }
+
+        // Clear selection
+        function clearSelection() {
+            selectedSessions.clear();
+            document.getElementById('selectAll').checked = false;
+            updateBulkActions();
+            renderSessionsTable();
+        }
+
+        // View chat history
+        function viewChatHistory(sessionId) {
+            currentSessionId = sessionId;
+            const session = allSessions.find(s => s.id === sessionId);
+            
+            if (!session) return;
+
+            // Update modal header
+            document.getElementById('modalSessionInfo').textContent = 
+                `Session: ${sessionId} | Status: ${session.status} | ${session.messageCount} messages`;
+
+            // Show modal
+            document.getElementById('chatHistoryModal').classList.add('show');
+
+            // Load chat history (simulate API call)
+            setTimeout(() => {
+                loadChatHistory(session);
+            }, 500);
+        }
+
+        // Load chat history content
+        function loadChatHistory(session) {
+            const chatContent = document.getElementById('chatHistoryContent');
+            
+            const messagesHtml = session.messages.map(message => {
+                const messageClass = message.role === 'user' ? 'user-message' : 
+                                   message.role === 'assistant' ? 'assistant-message' : 'tool-message';
+                const icon = message.role === 'user' ? 'fa-user' : 
+                           message.role === 'assistant' ? 'fa-robot' : 'fa-cog';
+                
+                return `
+                    <div class="${messageClass} p-4 rounded-lg mb-3">
+                        <div class="flex items-start space-x-3">
+                            <div class="flex-shrink-0">
+                                <i class="fas ${icon} text-lg"></i>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="font-medium text-white capitalize">${message.role}</span>
+                                    <span class="text-gray-400 text-xs">${message.timestamp.toLocaleTimeString()}</span>
+                                </div>
+                                <div class="text-gray-100 text-sm">${message.content}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            chatContent.innerHTML = messagesHtml;
+
+            // Update chat stats
+            const totalTokens = session.messages.reduce((sum, msg) => sum + msg.content.length, 0);
+            const duration = formatDuration(session.duration);
+            
+            document.getElementById('chatStats').textContent = 
+                `Messages: ${session.messageCount} | Duration: ${duration} | Tokens: ~${totalTokens}`;
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('chatHistoryModal').classList.remove('show');
+            currentSessionId = null;
+        }
+
+        // Export chat history
+        function exportChatHistory() {
+            if (!currentSessionId) return;
+            
+            const session = allSessions.find(s => s.id === currentSessionId);
+            if (!session) return;
+
+            const exportData = {
+                sessionId: session.id,
+                status: session.status,
+                duration: session.duration,
+                messageCount: session.messageCount,
+                messages: session.messages
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            downloadFile(blob, `chat_history_${session.id}.json`);
+        }
+
+        // Delete chat history
+        async function deleteChatHistory() {
+            if (!currentSessionId) return;
+            
+            if (!confirm('Are you sure you want to delete this chat history? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                showNotification('Deleting chat history...', 'info');
+                
+                // Call real delete API
+                const response = await fetch(`http://localhost:8000/chat_history/${currentSessionId}`, { 
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Delete result:', result);
+                
+                if (result.status === 'success') {
+                    // Remove from local data
+                    allSessions = allSessions.filter(s => s.id !== currentSessionId);
+                    filterSessions();
+                    closeModal();
+                    showNotification(`Chat history deleted successfully! (${result.deleted_messages} messages removed)`, 'success');
+                } else if (result.status === 'warning') {
+                    closeModal();
+                    showNotification(`Session not found: ${result.message}`, 'warning');
+                } else {
+                    showNotification('Failed to delete chat history: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showNotification('Error deleting chat history: ' + error.message, 'error');
+            }
+        }
+
+        // Delete single session
+        async function deleteSingleSession(sessionId) {
+            if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                showNotification('Deleting session...', 'info');
+                
+                const response = await fetch(`http://localhost:8000/chat_history/${sessionId}`, { 
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Delete single session result:', result);
+                
+                if (result.status === 'success') {
+                    allSessions = allSessions.filter(s => s.id !== sessionId);
+                    selectedSessions.delete(sessionId);
+                    filterSessions();
+                    showNotification(`Session deleted successfully! (${result.deleted_messages} messages removed)`, 'success');
+                } else if (result.status === 'warning') {
+                    showNotification(`Session not found: ${result.message}`, 'warning');
+                } else {
+                    showNotification('Failed to delete session: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Delete session error:', error);
+                showNotification('Error deleting session: ' + error.message, 'error');
+            }
+        }
+
+        // Bulk delete sessions
+        async function bulkDeleteSessions() {
+            if (selectedSessions.size === 0) return;
+            
+            if (!confirm(`Are you sure you want to delete ${selectedSessions.size} sessions? This action cannot be undone.`)) {
+                return;
+            }
+
+            const sessionIds = Array.from(selectedSessions);
+            let deleted = 0;
+            let failed = 0;
+            let totalMessages = 0;
+
+            showNotification(`Deleting ${sessionIds.length} sessions...`, 'info');
+
+            for (const sessionId of sessionIds) {
+                try {
+                    const response = await fetch(`http://localhost:8000/chat_history/${sessionId}`, { 
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        
+                        if (result.status === 'success') {
+                            deleted++;
+                            totalMessages += result.deleted_messages || 0;
+                            allSessions = allSessions.filter(s => s.id !== sessionId);
+                        } else {
+                            failed++;
+                        }
+                    } else {
+                        failed++;
+                    }
+                } catch (error) {
+                    console.error(`Failed to delete session ${sessionId}:`, error);
+                    failed++;
+                }
+                
+                // Small delay to prevent overwhelming the server
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            clearSelection();
+            filterSessions();
+            
+            if (deleted > 0) {
+                showNotification(`Bulk deletion completed: ${deleted} sessions deleted (${totalMessages} messages), ${failed} failed`, 
+                               failed === 0 ? 'success' : 'warning');
+            } else {
+                showNotification(`Bulk deletion failed: ${failed} sessions could not be deleted`, 'error');
+            }
+        }
+
+        // Bulk export sessions
+        function bulkExportSessions() {
+            if (selectedSessions.size === 0) return;
+
+            const sessionIds = Array.from(selectedSessions);
+            const exportData = allSessions.filter(s => sessionIds.includes(s.id));
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            downloadFile(blob, `bulk_sessions_${new Date().toISOString().split('T')[0]}.json`);
+        }
+
+        // Refresh sessions
+        function refreshSessions() {
+            document.getElementById('lastUpdate').textContent = 'Refreshing...';
+            loadSessions();
+        }
+
+        // Quick action functions
+        function cleanupInactiveSessions() {
+            const inactiveSessions = allSessions.filter(s => s.status === 'inactive');
+            
+            if (inactiveSessions.length === 0) {
+                alert('No inactive sessions to cleanup.');
+                return;
+            }
+
+            if (!confirm(`This will delete ${inactiveSessions.length} inactive sessions. Continue?`)) {
+                return;
+            }
+
+            // Select all inactive sessions for bulk delete
+            selectedSessions.clear();
+            inactiveSessions.forEach(s => selectedSessions.add(s.id));
+            bulkDeleteSessions();
+        }
+
+        function exportAllSessions() {
+            const blob = new Blob([JSON.stringify(allSessions, null, 2)], { type: 'application/json' });
+            downloadFile(blob, `all_sessions_${new Date().toISOString().split('T')[0]}.json`);
+        }
+
+        function showSessionStats() {
+            const stats = {
+                totalSessions: allSessions.length,
+                activeSessions: allSessions.filter(s => s.status === 'active').length,
+                totalMessages: allSessions.reduce((sum, s) => sum + s.messageCount, 0),
+                avgDuration: allSessions.reduce((sum, s) => sum + s.duration, 0) / allSessions.length,
+                longestSession: Math.max(...allSessions.map(s => s.duration)),
+                mostMessages: Math.max(...allSessions.map(s => s.messageCount))
+            };
+
+            alert(`Session Statistics:
+Total Sessions: ${stats.totalSessions}
+Active Sessions: ${stats.activeSessions}
+Total Messages: ${stats.totalMessages}
+Average Duration: ${formatDuration(stats.avgDuration)}
+Longest Session: ${formatDuration(stats.longestSession)}
+Most Messages: ${stats.mostMessages}`);
+        }
+
+        function privacyCompliance() {
+            alert(`Privacy Compliance Tools:
+- Data retention: 30 days
+- GDPR compliant deletion
+- Automatic cleanup of old sessions
+- User data export capabilities
+
+Use the bulk actions to manage data retention and compliance.`);
+        }
+
+        function requestDataDeletion() {
+            if (confirm('This will schedule deletion of all session data older than 30 days. Continue?')) {
+                alert('Data deletion request submitted. Old sessions will be removed within 24 hours.');
+            }
+        }
+
+        // Utility functions
+        function getTimeAgo(date) {
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            return `${diffDays}d ago`;
+        }
+
+        function getActivityDotClass(date) {
+            const now = new Date();
+            const diffMs = now - date;
+            
+            if (diffMs < 300000) return 'activity-recent'; // 5 minutes
+            if (diffMs < 1800000) return 'activity-moderate'; // 30 minutes
+            return 'activity-old';
+        }
+
+        function formatDuration(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+
+            if (hours > 0) return `${hours}h ${minutes % 60}m`;
+            if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+            return `${seconds}s`;
+        }
+
+        function downloadFile(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

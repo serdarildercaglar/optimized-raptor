@@ -289,7 +289,7 @@ def create_production_config(
     
     # Initialize models
     embed_model = CustomEmbeddingModel()
-    sum_model = GPT4OSummarizationModel()
+    sum_model = GPT41SummarizationModel()
     
     return RetrievalAugmentationConfig(
         # Tree building

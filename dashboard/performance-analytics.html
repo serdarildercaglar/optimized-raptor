@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📈 RAPTOR Performance Analytics</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .large-chart {
+            height: 400px;
+        }
+        .metric-trend-up { color: #10b981; }
+        .metric-trend-down { color: #ef4444; }
+        .metric-trend-stable { color: #6b7280; }
+        .time-selector {
+            transition: all 0.2s ease;
+        }
+        .time-selector.active {
+            background: rgba(59, 130, 246, 0.3);
+            border-color: #3b82f6;
+        }
+        .export-btn {
+            transition: all 0.2s ease;
+        }
+        .export-btn:hover {
+            transform: translateY(-1px);
+        }
+        .performance-grade {
+            font-size: 3rem;
+            font-weight: bold;
+            text-shadow: 0 0 20px currentColor;
+        }
+        .grade-A { color: #10b981; }
+        .grade-B { color: #3b82f6; }
+        .grade-C { color: #f59e0b; }
+        .grade-D { color: #f97316; }
+        .grade-F { color: #ef4444; }
+        .metric-card {
+            transition: all 0.3s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .trend-indicator {
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 min-h-screen">
+    <!-- Header -->
+    <header class="glass-card m-4 rounded-xl p-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <a href="index.html" class="text-2xl hover:scale-110 transition-transform">🌳</a>
+                <div>
+                    <h1 class="text-2xl font-bold text-white">📈 Performance Analytics</h1>
+                    <p class="text-gray-300">Historical Metrics & Trend Analysis</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <!-- Time Range Selector -->
+                <div class="flex space-x-2">
+                    <button onclick="setTimeRange('1h')" class="time-selector px-3 py-1 rounded-lg border border-gray-600 text-gray-300 text-sm active" id="btn-1h">1H</button>
+                    <button onclick="setTimeRange('6h')" class="time-selector px-3 py-1 rounded-lg border border-gray-600 text-gray-300 text-sm" id="btn-6h">6H</button>
+                    <button onclick="setTimeRange('24h')" class="time-selector px-3 py-1 rounded-lg border border-gray-600 text-gray-300 text-sm" id="btn-24h">24H</button>
+                    <button onclick="setTimeRange('7d')" class="time-selector px-3 py-1 rounded-lg border border-gray-600 text-gray-300 text-sm" id="btn-7d">7D</button>
+                    <button onclick="setTimeRange('30d')" class="time-selector px-3 py-1 rounded-lg border border-gray-600 text-gray-300 text-sm" id="btn-30d">30D</button>
+                </div>
+                <!-- Export Buttons -->
+                <div class="flex space-x-2">
+                    <button onclick="exportData('json')" class="export-btn bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm">
+                        <i class="fas fa-download mr-1"></i>JSON
+                    </button>
+                    <button onclick="exportData('csv')" class="export-btn bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm">
+                        <i class="fas fa-file-csv mr-1"></i>CSV
+                    </button>
+                </div>
+                <div class="text-gray-300 text-sm" id="lastAnalysisUpdate">Loading...</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Performance Overview Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mx-4 mb-6">
+        <!-- Overall Performance Grade -->
+        <div class="metric-card glass-card rounded-xl p-6 text-center">
+            <h3 class="text-lg font-semibold text-white mb-2">Performance Grade</h3>
+            <div class="performance-grade" id="overallGrade">A</div>
+            <p class="text-gray-300 text-sm" id="gradeDescription">Excellent Performance</p>
+            <div class="mt-2">
+                <span class="trend-indicator" id="gradeTrend">↗ Improving</span>
+            </div>
+        </div>
+
+        <!-- Average Response Time -->
+        <div class="metric-card glass-card rounded-xl p-6">
+            <h3 class="text-lg font-semibold text-white mb-2">Avg Response Time</h3>
+            <div class="text-3xl font-bold text-blue-400" id="avgResponseTime">2.3s</div>
+            <p class="text-gray-300 text-sm">AI Query Processing</p>
+            <div class="mt-2 flex items-center justify-between">
+                <span class="text-xs text-gray-400">Target: &lt;5s</span>
+                <span class="trend-indicator" id="responseTimeTrend">↗ +0.3s</span>
+            </div>
+        </div>
+
+        <!-- Throughput -->
+        <div class="metric-card glass-card rounded-xl p-6">
+            <h3 class="text-lg font-semibold text-white mb-2">Throughput</h3>
+            <div class="text-3xl font-bold text-green-400" id="throughput">15.7</div>
+            <p class="text-gray-300 text-sm">Queries per Minute</p>
+            <div class="mt-2 flex items-center justify-between">
+                <span class="text-xs text-gray-400">Peak: 23.2/min</span>
+                <span class="trend-indicator" id="throughputTrend">→ Stable</span>
+            </div>
+        </div>
+
+        <!-- Success Rate -->
+        <div class="metric-card glass-card rounded-xl p-6">
+            <h3 class="text-lg font-semibold text-white mb-2">Success Rate</h3>
+            <div class="text-3xl font-bold text-purple-400" id="successRate">98.7%</div>
+            <p class="text-gray-300 text-sm">Successful Conversations</p>
+            <div class="mt-2 flex items-center justify-between">
+                <span class="text-xs text-gray-400">Target: &gt;95%</span>
+                <span class="trend-indicator" id="successRateTrend">↗ +0.2%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Analytics Dashboard -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mx-4 mb-6">
+        
+        <!-- Left Column - Main Charts -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Primary Performance Chart -->
+            <div class="glass-card rounded-xl p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-white">📊 Performance Trends</h3>
+                    <div class="flex space-x-2">
+                        <button onclick="setChartMetric('response_time')" class="chart-metric-btn px-3 py-1 rounded text-sm bg-blue-600 text-white" id="metric-response_time">Response Time</button>
+                        <button onclick="setChartMetric('throughput')" class="chart-metric-btn px-3 py-1 rounded text-sm border border-gray-600 text-gray-300" id="metric-throughput">Throughput</button>
+                        <button onclick="setChartMetric('memory')" class="chart-metric-btn px-3 py-1 rounded text-sm border border-gray-600 text-gray-300" id="metric-memory">Memory</button>
+                        <button onclick="setChartMetric('errors')" class="chart-metric-btn px-3 py-1 rounded text-sm border border-gray-600 text-gray-300" id="metric-errors">Errors</button>
+                    </div>
+                </div>
+                <div class="chart-container large-chart">
+                    <canvas id="primaryChart"></canvas>
+                </div>
+            </div>
+
+            <!-- RAPTOR-Specific Metrics -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Cache Performance -->
+                <div class="glass-card rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">🎯 Cache Performance</h3>
+                    <div class="chart-container">
+                        <canvas id="cacheChart"></canvas>
+                    </div>
+                    <div class="mt-4 grid grid-cols-2 gap-4 text-center">
+                        <div>
+                            <div class="text-2xl font-bold text-green-400" id="cacheHitRate">87.3%</div>
+                            <div class="text-gray-300 text-sm">Hit Rate</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-blue-400" id="cacheSize">2.1GB</div>
+                            <div class="text-gray-300 text-sm">Cache Size</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RAG Query Analysis -->
+                <div class="glass-card rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">🔍 RAG Query Analysis</h3>
+                    <div class="chart-container">
+                        <canvas id="ragChart"></canvas>
+                    </div>
+                    <div class="mt-4 grid grid-cols-2 gap-4 text-center">
+                        <div>
+                            <div class="text-2xl font-bold text-purple-400" id="ragQueries">142</div>
+                            <div class="text-gray-300 text-sm">RAG Searches</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-yellow-400" id="avgRetrievalTime">890ms</div>
+                            <div class="text-gray-300 text-sm">Avg Retrieval</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resource Utilization Heatmap -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">💻 Resource Utilization</h3>
+                <div class="chart-container">
+                    <canvas id="resourceChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Analysis & Reports -->
+        <div class="space-y-6">
+            
+            <!-- Performance Insights -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">🔍 Performance Insights</h3>
+                <div class="space-y-4" id="performanceInsights">
+                    <div class="loading-spinner mx-auto"></div>
+                </div>
+            </div>
+
+            <!-- Top Performance Metrics -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">🏆 Top Metrics</h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center p-3 bg-green-900 bg-opacity-30 rounded-lg">
+                        <div>
+                            <div class="text-white font-medium">Best Response Time</div>
+                            <div class="text-gray-300 text-sm">Today at 14:23</div>
+                        </div>
+                        <div class="text-green-400 font-bold">0.8s</div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center p-3 bg-blue-900 bg-opacity-30 rounded-lg">
+                        <div>
+                            <div class="text-white font-medium">Peak Throughput</div>
+                            <div class="text-gray-300 text-sm">Today at 10:15</div>
+                        </div>
+                        <div class="text-blue-400 font-bold">23.2/min</div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center p-3 bg-purple-900 bg-opacity-30 rounded-lg">
+                        <div>
+                            <div class="text-white font-medium">Cache Hit Peak</div>
+                            <div class="text-gray-300 text-sm">Today at 16:42</div>
+                        </div>
+                        <div class="text-purple-400 font-bold">94.7%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Health Timeline -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">⚡ System Health Timeline</h3>
+                <div class="space-y-3" id="healthTimeline">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <div class="flex-1">
+                            <div class="text-white text-sm">System Optimal</div>
+                            <div class="text-gray-400 text-xs">16:45 - Present</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                        <div class="flex-1">
+                            <div class="text-white text-sm">High Memory Usage</div>
+                            <div class="text-gray-400 text-xs">15:20 - 16:44 (1h 24m)</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <div class="flex-1">
+                            <div class="text-white text-sm">Cache Optimization</div>
+                            <div class="text-gray-400 text-xs">14:15 - 15:19 (1h 4m)</div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        <div class="flex-1">
+                            <div class="text-white text-sm">System Restart</div>
+                            <div class="text-gray-400 text-xs">14:12 - 14:14 (2m)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Recommendations -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">💡 Recommendations</h3>
+                <div class="space-y-3" id="recommendations">
+                    <div class="p-3 bg-blue-900 bg-opacity-30 rounded-lg border-l-4 border-blue-500">
+                        <div class="text-white font-medium text-sm">Optimize Cache TTL</div>
+                        <div class="text-gray-300 text-xs mt-1">Current hit rate: 87%. Increase TTL to 2h for better performance.</div>
+                    </div>
+                    
+                    <div class="p-3 bg-green-900 bg-opacity-30 rounded-lg border-l-4 border-green-500">
+                        <div class="text-white font-medium text-sm">Enable Early Termination</div>
+                        <div class="text-gray-300 text-xs mt-1">Reduce average response time by 15% with confidence threshold: 0.8</div>
+                    </div>
+                    
+                    <div class="p-3 bg-purple-900 bg-opacity-30 rounded-lg border-l-4 border-purple-500">
+                        <div class="text-white font-medium text-sm">Scale Concurrent Operations</div>
+                        <div class="text-gray-300 text-xs mt-1">Increase from 10 to 12 for 20% throughput improvement.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Reports -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">📄 Generate Reports</h3>
+                <div class="space-y-3">
+                    <button onclick="generateReport('performance')" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg text-sm">
+                        <i class="fas fa-chart-line mr-2"></i>Performance Report
+                    </button>
+                    <button onclick="generateReport('capacity')" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg text-sm">
+                        <i class="fas fa-server mr-2"></i>Capacity Planning
+                    </button>
+                    <button onclick="generateReport('optimization')" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm">
+                        <i class="fas fa-magic mr-2"></i>Optimization Guide
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentTimeRange = '1h';
+        let currentChartMetric = 'response_time';
+        let charts = {};
+        let analyticsData = {};
+
+        // Chart data
+        const chartConfigs = {
+            response_time: {
+                label: 'Response Time (ms)',
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                yAxisMax: 10000
+            },
+            throughput: {
+                label: 'Queries/min',
+                borderColor: 'rgb(16, 185, 129)',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                yAxisMax: 30
+            },
+            memory: {
+                label: 'Memory Usage %',
+                borderColor: 'rgb(168, 85, 247)',
+                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                yAxisMax: 100
+            },
+            errors: {
+                label: 'Error Rate %',
+                borderColor: 'rgb(239, 68, 68)',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                yAxisMax: 10
+            }
+        };
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            loadAnalyticsData();
+            
+            // Update data every 30 seconds
+            setInterval(loadAnalyticsData, 30000);
+        });
+
+        // Initialize all charts
+        function initializeCharts() {
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.7)'
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.7)'
+                        }
+                    }
+                }
+            };
+
+            // Primary performance chart
+            const primaryCtx = document.getElementById('primaryChart').getContext('2d');
+            charts.primary = new Chart(primaryCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Response Time (ms)',
+                        data: [],
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: chartOptions
+            });
+
+            // Cache performance chart
+            const cacheCtx = document.getElementById('cacheChart').getContext('2d');
+            charts.cache = new Chart(cacheCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Cache Hits', 'Cache Misses'],
+                    datasets: [{
+                        data: [87, 13],
+                        backgroundColor: ['rgb(16, 185, 129)', 'rgb(239, 68, 68)'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // RAG query analysis chart
+            const ragCtx = document.getElementById('ragChart').getContext('2d');
+            charts.rag = new Chart(ragCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Simple', 'Complex', 'Multi-step', 'Cached'],
+                    datasets: [{
+                        label: 'Queries',
+                        data: [45, 28, 15, 54],
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.8)',
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(168, 85, 247, 0.8)',
+                            'rgba(245, 158, 11, 0.8)'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Resource utilization chart
+            const resourceCtx = document.getElementById('resourceChart').getContext('2d');
+            charts.resource = new Chart(resourceCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'CPU %',
+                            data: [],
+                            borderColor: 'rgb(239, 68, 68)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Memory %',
+                            data: [],
+                            borderColor: 'rgb(168, 85, 247)',
+                            backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    ...chartOptions,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Load analytics data
+        async function loadAnalyticsData() {
+            try {
+                // Fetch current metrics
+                const response = await fetch('/metrics/live');
+                const data = await response.json();
+                
+                // Generate historical data (simulated for demo)
+                generateHistoricalData(data);
+                
+                // Update all visualizations
+                updateAnalyticsDashboard();
+                
+                document.getElementById('lastAnalysisUpdate').textContent = 
+                    'Updated: ' + new Date().toLocaleTimeString();
+                    
+            } catch (error) {
+                console.error('Failed to load analytics data:', error);
+            }
+        }
+
+        // Generate historical data (simulated)
+        function generateHistoricalData(currentData) {
+            const now = new Date();
+            const points = getTimeRangePoints(currentTimeRange);
+            
+            analyticsData = {
+                timestamps: [],
+                response_times: [],
+                throughput: [],
+                memory_usage: [],
+                error_rates: [],
+                cache_hits: [],
+                rag_queries: []
+            };
+
+            // Generate timestamps
+            for (let i = points - 1; i >= 0; i--) {
+                const timestamp = new Date(now.getTime() - (i * getTimeInterval(currentTimeRange)));
+                analyticsData.timestamps.push(timestamp.toLocaleTimeString());
+            }
+
+            // Generate realistic data with trends
+            for (let i = 0; i < points; i++) {
+                const variation = Math.random() * 0.3 - 0.15; // ±15% variation
+                
+                // Response times (1-5 seconds)
+                analyticsData.response_times.push(
+                    Math.max(1000, 2300 + (variation * 1000) + (Math.sin(i * 0.1) * 500))
+                );
+                
+                // Throughput (10-25 queries/min)
+                analyticsData.throughput.push(
+                    Math.max(5, 15.7 + (variation * 5) + (Math.cos(i * 0.15) * 3))
+                );
+                
+                // Memory usage (30-90%)
+                analyticsData.memory_usage.push(
+                    Math.max(30, Math.min(90, 65 + (variation * 20) + (Math.sin(i * 0.05) * 10)))
+                );
+                
+                // Error rates (0-5%)
+                analyticsData.error_rates.push(
+                    Math.max(0, Math.min(5, 1.3 + (variation * 2)))
+                );
+                
+                // Cache hits (70-95%)
+                analyticsData.cache_hits.push(
+                    Math.max(70, Math.min(95, 87 + (variation * 8)))
+                );
+                
+                // RAG queries (5-30 per interval)
+                analyticsData.rag_queries.push(
+                    Math.max(5, 18 + (variation * 10))
+                );
+            }
+        }
+
+        // Update dashboard with analytics
+        function updateAnalyticsDashboard() {
+            // Update performance overview cards
+            updatePerformanceCards();
+            
+            // Update primary chart
+            updatePrimaryChart();
+            
+            // Update other charts
+            updateCacheChart();
+            updateResourceChart();
+            
+            // Update insights
+            updatePerformanceInsights();
+        }
+
+        // Update performance cards
+        function updatePerformanceCards() {
+            const latestIndex = analyticsData.response_times.length - 1;
+            
+            // Calculate metrics
+            const avgResponseTime = (analyticsData.response_times[latestIndex] / 1000).toFixed(1);
+            const throughput = analyticsData.throughput[latestIndex].toFixed(1);
+            const successRate = (100 - analyticsData.error_rates[latestIndex]).toFixed(1);
+            
+            // Update displays
+            document.getElementById('avgResponseTime').textContent = avgResponseTime + 's';
+            document.getElementById('throughput').textContent = throughput;
+            document.getElementById('successRate').textContent = successRate + '%';
+            
+            // Calculate trends (compare last 5 points with previous 5)
+            updateTrendIndicators();
+            
+            // Update performance grade
+            updatePerformanceGrade(avgResponseTime, throughput, successRate);
+        }
+
+        // Update trend indicators
+        function updateTrendIndicators() {
+            const latest = analyticsData.response_times.length - 1;
+            const mid = Math.floor(latest / 2);
+            
+            // Response time trend
+            const responseTimeTrend = calculateTrend(analyticsData.response_times, mid, latest);
+            updateTrendElement('responseTimeTrend', responseTimeTrend, 'ms', true);
+            
+            // Throughput trend
+            const throughputTrend = calculateTrend(analyticsData.throughput, mid, latest);
+            updateTrendElement('throughputTrend', throughputTrend, '/min');
+            
+            // Success rate trend (inverse of error rate)
+            const errorTrend = calculateTrend(analyticsData.error_rates, mid, latest);
+            updateTrendElement('successRateTrend', -errorTrend, '%');
+        }
+
+        // Calculate trend between two periods
+        function calculateTrend(data, start, end) {
+            const recent = data.slice(Math.max(0, end - 2), end + 1);
+            const previous = data.slice(Math.max(0, start - 2), start + 1);
+            
+            const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+            const previousAvg = previous.reduce((a, b) => a + b, 0) / previous.length;
+            
+            return recentAvg - previousAvg;
+        }
+
+        // Update trend element
+        function updateTrendElement(elementId, trend, unit, isInverse = false) {
+            const element = document.getElementById(elementId);
+            const abs = Math.abs(trend);
+            const sign = (isInverse ? trend < 0 : trend > 0) ? '↗' : (trend === 0 ? '→' : '↘');
+            const className = (isInverse ? trend < 0 : trend > 0) ? 'metric-trend-up' : 
+                            (trend === 0 ? 'metric-trend-stable' : 'metric-trend-down');
+            
+            element.textContent = `${sign} ${abs.toFixed(abs < 1 ? 2 : 1)}${unit}`;
+            element.className = `trend-indicator ${className}`;
+        }
+
+        // Update performance grade
+        function updatePerformanceGrade(responseTime, throughput, successRate) {
+            let grade = 'A';
+            let description = 'Excellent Performance';
+            
+            if (responseTime > 5 || successRate < 95) {
+                grade = 'F';
+                description = 'Needs Immediate Attention';
+            } else if (responseTime > 4 || successRate < 97) {
+                grade = 'D';
+                description = 'Poor Performance';
+            } else if (responseTime > 3 || successRate < 98) {
+                grade = 'C';
+                description = 'Fair Performance';
+            } else if (responseTime > 2.5 || successRate < 99) {
+                grade = 'B';
+                description = 'Good Performance';
+            }
+            
+            const gradeEl = document.getElementById('overallGrade');
+            gradeEl.textContent = grade;
+            gradeEl.className = `performance-grade grade-${grade}`;
+            document.getElementById('gradeDescription').textContent = description;
+        }
+
+        // Update primary chart
+        function updatePrimaryChart() {
+            const chart = charts.primary;
+            const config = chartConfigs[currentChartMetric];
+            
+            chart.data.labels = analyticsData.timestamps;
+            chart.data.datasets[0].label = config.label;
+            chart.data.datasets[0].borderColor = config.borderColor;
+            chart.data.datasets[0].backgroundColor = config.backgroundColor;
+            
+            switch (currentChartMetric) {
+                case 'response_time':
+                    chart.data.datasets[0].data = analyticsData.response_times;
+                    break;
+                case 'throughput':
+                    chart.data.datasets[0].data = analyticsData.throughput;
+                    break;
+                case 'memory':
+                    chart.data.datasets[0].data = analyticsData.memory_usage;
+                    break;
+                case 'errors':
+                    chart.data.datasets[0].data = analyticsData.error_rates;
+                    break;
+            }
+            
+            chart.options.scales.y.max = config.yAxisMax;
+            chart.update('none');
+        }
+
+        // Update cache chart
+        function updateCacheChart() {
+            const latestHitRate = analyticsData.cache_hits[analyticsData.cache_hits.length - 1];
+            const hitRate = Math.round(latestHitRate);
+            const missRate = 100 - hitRate;
+            
+            charts.cache.data.datasets[0].data = [hitRate, missRate];
+            charts.cache.update('none');
+            
+            document.getElementById('cacheHitRate').textContent = hitRate + '%';
+        }
+
+        // Update resource chart
+        function updateResourceChart() {
+            const chart = charts.resource;
+            
+            // Generate CPU data (lower than memory)
+            const cpuData = analyticsData.memory_usage.map(mem => Math.max(10, mem * 0.6 + (Math.random() * 10 - 5)));
+            
+            chart.data.labels = analyticsData.timestamps;
+            chart.data.datasets[0].data = cpuData;
+            chart.data.datasets[1].data = analyticsData.memory_usage;
+            chart.update('none');
+        }
+
+        // Update performance insights
+        function updatePerformanceInsights() {
+            const insights = [
+                {
+                    icon: 'fas fa-rocket',
+                    title: 'Response Time Optimization',
+                    description: 'Average response time is within target range. Consider enabling early termination for 15% improvement.',
+                    impact: 'Medium',
+                    color: 'blue'
+                },
+                {
+                    icon: 'fas fa-memory',
+                    title: 'Memory Usage Trend',
+                    description: 'Memory usage shows gradual increase. Schedule cache cleanup during low-traffic periods.',
+                    impact: 'Low',
+                    color: 'yellow'
+                },
+                {
+                    icon: 'fas fa-chart-line',
+                    title: 'Throughput Analysis',
+                    description: 'Current throughput is optimal. Peak capacity utilization: 68%.',
+                    impact: 'Info',
+                    color: 'green'
+                }
+            ];
+            
+            const insightsHtml = insights.map(insight => `
+                <div class="p-3 bg-${insight.color}-900 bg-opacity-30 rounded-lg border-l-4 border-${insight.color}-500">
+                    <div class="flex items-start space-x-3">
+                        <i class="${insight.icon} text-${insight.color}-400 mt-1"></i>
+                        <div>
+                            <h4 class="text-white font-medium text-sm">${insight.title}</h4>
+                            <p class="text-gray-300 text-xs mt-1">${insight.description}</p>
+                            <span class="inline-block mt-2 px-2 py-1 text-xs bg-${insight.color}-600 text-white rounded">
+                                ${insight.impact} Impact
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('performanceInsights').innerHTML = insightsHtml;
+        }
+
+        // Utility functions
+        function getTimeRangePoints(range) {
+            const points = {
+                '1h': 60,    // 1 minute intervals
+                '6h': 72,    // 5 minute intervals
+                '24h': 96,   // 15 minute intervals
+                '7d': 168,   // 1 hour intervals
+                '30d': 120   // 6 hour intervals
+            };
+            return points[range] || 60;
+        }
+
+        function getTimeInterval(range) {
+            const intervals = {
+                '1h': 60 * 1000,           // 1 minute
+                '6h': 5 * 60 * 1000,       // 5 minutes
+                '24h': 15 * 60 * 1000,     // 15 minutes
+                '7d': 60 * 60 * 1000,      // 1 hour
+                '30d': 6 * 60 * 60 * 1000  // 6 hours
+            };
+            return intervals[range] || 60 * 1000;
+        }
+
+        // Event handlers
+        function setTimeRange(range) {
+            // Update active button
+            document.querySelectorAll('.time-selector').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`btn-${range}`).classList.add('active');
+            
+            currentTimeRange = range;
+            loadAnalyticsData();
+        }
+
+        function setChartMetric(metric) {
+            // Update active button
+            document.querySelectorAll('.chart-metric-btn').forEach(btn => {
+                btn.className = 'chart-metric-btn px-3 py-1 rounded text-sm border border-gray-600 text-gray-300';
+            });
+            document.getElementById(`metric-${metric}`).className = 'chart-metric-btn px-3 py-1 rounded text-sm bg-blue-600 text-white';
+            
+            currentChartMetric = metric;
+            updatePrimaryChart();
+        }
+
+        function exportData(format) {
+            const data = {
+                timestamp: new Date().toISOString(),
+                timeRange: currentTimeRange,
+                metrics: analyticsData
+            };
+            
+            if (format === 'json') {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                downloadFile(blob, `raptor_analytics_${currentTimeRange}.json`);
+            } else if (format === 'csv') {
+                const csv = convertToCSV(data);
+                const blob = new Blob([csv], { type: 'text/csv' });
+                downloadFile(blob, `raptor_analytics_${currentTimeRange}.csv`);
+            }
+        }
+
+        function convertToCSV(data) {
+            const headers = ['timestamp', 'response_time_ms', 'throughput_qpm', 'memory_percent', 'error_rate_percent', 'cache_hit_percent'];
+            const rows = [headers.join(',')];
+            
+            for (let i = 0; i < data.metrics.timestamps.length; i++) {
+                const row = [
+                    data.metrics.timestamps[i],
+                    data.metrics.response_times[i],
+                    data.metrics.throughput[i],
+                    data.metrics.memory_usage[i],
+                    data.metrics.error_rates[i],
+                    data.metrics.cache_hits[i]
+                ];
+                rows.push(row.join(','));
+            }
+            
+            return rows.join('\n');
+        }
+
+        function downloadFile(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function generateReport(type) {
+            const reports = {
+                performance: 'Generating comprehensive performance analysis report...',
+                capacity: 'Analyzing current capacity and generating scaling recommendations...',
+                optimization: 'Creating detailed optimization guide with actionable recommendations...'
+            };
+            
+            alert(reports[type] + '\n\nThis feature will generate a detailed PDF report with analytics data.');
+        }
+    </script>
+</body>
+</html>

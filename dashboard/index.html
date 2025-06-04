@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌳 RAPTOR Production Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .health-excellent { color: #10b981; }
+        .health-good { color: #3b82f6; }
+        .health-degraded { color: #f59e0b; }
+        .health-critical { color: #ef4444; }
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .metric-card {
+            transition: all 0.3s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .chart-container {
+            position: relative;
+            height: 250px;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-healthy { background-color: #10b981; }
+        .status-degraded { background-color: #f59e0b; }
+        .status-critical { background-color: #ef4444; }
+        .action-button {
+            transition: all 0.2s ease;
+        }
+        .action-button:hover {
+            transform: scale(1.05);
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 min-h-screen">
+    <!-- Header -->
+    <header class="glass-card m-4 rounded-xl p-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="text-3xl">🌳</div>
+                <div>
+                    <h1 class="text-2xl font-bold text-white">RAPTOR Production Dashboard</h1>
+                    <p class="text-gray-300">Enterprise RAG System Monitoring</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    <div class="pulse-dot status-indicator" id="connectionStatus"></div>
+                    <span class="text-white font-medium" id="connectionText">Connecting...</span>
+                </div>
+                <div class="text-gray-300 text-sm" id="lastUpdate">--:--:--</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Alert/Notification -->
+    <div id="notification" class="notification">
+        <div class="glass-card rounded-lg p-4 max-w-sm">
+            <div class="flex items-center space-x-3">
+                <i id="notificationIcon" class="fas fa-info-circle text-blue-400"></i>
+                <span id="notificationText" class="text-white"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mx-4 mb-6">
+        
+        <!-- System Overview -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Key Metrics Row -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- Health Status -->
+                <div class="metric-card glass-card rounded-xl p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-300 text-sm">System Health</p>
+                            <p class="text-2xl font-bold" id="healthStatus">--</p>
+                            <p class="text-xs text-gray-400" id="healthScore">Score: --</p>
+                        </div>
+                        <i class="fas fa-heartbeat text-3xl text-red-400"></i>
+                    </div>
+                </div>
+
+                <!-- Active Connections -->
+                <div class="metric-card glass-card rounded-xl p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-300 text-sm">Active Connections</p>
+                            <p class="text-2xl font-bold text-blue-400" id="activeConnections">--</p>
+                            <p class="text-xs text-gray-400" id="totalSessions">Sessions: --</p>
+                        </div>
+                        <i class="fas fa-users text-3xl text-blue-400"></i>
+                    </div>
+                </div>
+
+                <!-- RAPTOR Queries -->
+                <div class="metric-card glass-card rounded-xl p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-300 text-sm">RAPTOR Queries</p>
+                            <p class="text-2xl font-bold text-green-400" id="raptorQueries">--</p>
+                            <p class="text-xs text-gray-400" id="queryRate">Rate: -- /min</p>
+                        </div>
+                        <i class="fas fa-search text-3xl text-green-400"></i>
+                    </div>
+                </div>
+
+                <!-- Error Rate -->
+                <div class="metric-card glass-card rounded-xl p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-300 text-sm">Error Rate</p>
+                            <p class="text-2xl font-bold text-yellow-400" id="errorRate">--%</p>
+                            <p class="text-xs text-gray-400" id="totalErrors">Errors: --</p>
+                        </div>
+                        <i class="fas fa-exclamation-triangle text-3xl text-yellow-400"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Memory Usage Chart -->
+                <div class="glass-card rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">Memory Usage</h3>
+                    <div class="chart-container">
+                        <canvas id="memoryChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Response Time Chart -->
+                <div class="glass-card rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">Response Times</h3>
+                    <div class="chart-container">
+                        <canvas id="responseChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RAPTOR Status -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">🌳 RAPTOR Tree Status</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-blue-400" id="treeNodes">--</p>
+                        <p class="text-gray-300 text-sm">Total Nodes</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-green-400" id="treeLayers">--</p>
+                        <p class="text-gray-300 text-sm">Tree Layers</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-purple-400" id="cacheHitRate">--%</p>
+                        <p class="text-gray-300 text-sm">Cache Hit Rate</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-yellow-400" id="avgQueryTime">--ms</p>
+                        <p class="text-gray-300 text-sm">Avg Query Time</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="space-y-6">
+            
+            <!-- Quick Actions -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">⚡ Quick Actions</h3>
+                <div class="space-y-3">
+                    <button onclick="clearCache()" class="action-button w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg flex items-center justify-center space-x-2">
+                        <i class="fas fa-trash"></i>
+                        <span>Clear All Cache</span>
+                    </button>
+                    
+                    <button onclick="optimizeRaptor()" class="action-button w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg flex items-center justify-center space-x-2">
+                        <i class="fas fa-magic"></i>
+                        <span>Optimize RAPTOR</span>
+                    </button>
+                    
+                    <button onclick="showMemoryUsage()" class="action-button w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg flex items-center justify-center space-x-2">
+                        <i class="fas fa-memory"></i>
+                        <span>Memory Details</span>
+                    </button>
+                    
+                    <button onclick="viewSessions()" class="action-button w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg flex items-center justify-center space-x-2">
+                        <i class="fas fa-users"></i>
+                        <span>Manage Sessions</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- System Resources -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">💻 System Resources</h3>
+                <div class="space-y-4">
+                    <!-- Memory -->
+                    <div>
+                        <div class="flex justify-between text-sm text-gray-300 mb-1">
+                            <span>Memory Usage</span>
+                            <span id="memoryPercent">--%</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div id="memoryBar" class="h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1" id="memoryDetails">-- GB available</p>
+                    </div>
+
+                    <!-- CPU -->
+                    <div>
+                        <div class="flex justify-between text-sm text-gray-300 mb-1">
+                            <span>CPU Usage</span>
+                            <span id="cpuPercent">--%</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div id="cpuBar" class="h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Redis -->
+                    <div>
+                        <div class="flex justify-between text-sm text-gray-300 mb-1">
+                            <span>Redis Status</span>
+                            <span class="flex items-center" id="redisStatus">
+                                <div class="status-indicator" id="redisIndicator"></div>
+                                <span id="redisText">--</span>
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-400" id="redisDetails">Memory: -- MB</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">📊 Activity Log</h3>
+                <div id="activityLog" class="space-y-2 max-h-60 overflow-y-auto">
+                    <div class="text-gray-400 text-sm text-center py-4">Loading activity...</div>
+                </div>
+            </div>
+
+            <!-- System Alerts -->
+            <div class="glass-card rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">⚠️ System Alerts</h3>
+                <div id="systemAlerts" class="space-y-2">
+                    <div class="text-gray-400 text-sm text-center py-4">No alerts</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let wsConnection = null;
+        let memoryChart = null;
+        let responseChart = null;
+        let isConnected = false;
+        let activityBuffer = [];
+        let lastMetrics = null;
+
+        // Chart data buffers (keep last 20 points)
+        const memoryData = {
+            labels: [],
+            datasets: [{
+                label: 'Memory %',
+                data: [],
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        };
+
+        const responseData = {
+            labels: [],
+            datasets: [{
+                label: 'Response Time (ms)',
+                data: [],
+                borderColor: 'rgb(16, 185, 129)',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        };
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            connectWebSocket();
+            
+            // Update every 5 seconds if WS fails
+            setInterval(() => {
+                if (!isConnected) {
+                    fetchMetrics();
+                }
+            }, 5000);
+        });
+
+        // Initialize Chart.js charts
+        function initializeCharts() {
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        display: false,
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        display: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.7)'
+                        }
+                    }
+                }
+            };
+
+            // Memory Chart
+            const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+            memoryChart = new Chart(memoryCtx, {
+                type: 'line',
+                data: memoryData,
+                options: {
+                    ...commonOptions,
+                    scales: {
+                        ...commonOptions.scales,
+                        y: {
+                            ...commonOptions.scales.y,
+                            min: 0,
+                            max: 100
+                        }
+                    }
+                }
+            });
+
+            // Response Time Chart
+            const responseCtx = document.getElementById('responseChart').getContext('2d');
+            responseChart = new Chart(responseCtx, {
+                type: 'line',
+                data: responseData,
+                options: commonOptions
+            });
+        }
+
+        // WebSocket connection
+        function connectWebSocket() {
+            // For now, use polling since we don't have a metrics WebSocket endpoint
+            // In production, you'd implement a WebSocket endpoint for real-time metrics
+            fetchMetrics();
+            setInterval(fetchMetrics, 3000); // Update every 3 seconds
+        }
+
+        // Fetch metrics from REST API
+        async function fetchMetrics() {
+            try {
+                const response = await fetch('http://localhost:8000/metrics/live');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Live metrics received:', data);
+                updateDashboard(data);
+                updateConnectionStatus(true);
+            } catch (error) {
+                console.error('Failed to fetch metrics:', error);
+                updateConnectionStatus(false);
+                
+                // Show error in dashboard
+                showNotification(`Failed to connect to RAPTOR server: ${error.message}`, 'error');
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            isConnected = connected;
+            const statusEl = document.getElementById('connectionStatus');
+            const textEl = document.getElementById('connectionText');
+            
+            if (connected) {
+                statusEl.className = 'pulse-dot status-indicator status-healthy';
+                textEl.textContent = 'Connected';
+            } else {
+                statusEl.className = 'pulse-dot status-indicator status-critical';
+                textEl.textContent = 'Disconnected';
+            }
+            
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        }
+
+        // Update dashboard with metrics
+        function updateDashboard(metrics) {
+            // Health Status
+            const health = metrics.health_status || {};
+            updateHealthStatus(health);
+            
+            // Application Metrics
+            const appMetrics = metrics.application_metrics || {};
+            document.getElementById('activeConnections').textContent = appMetrics.active_websocket_connections || 0;
+            document.getElementById('raptorQueries').textContent = appMetrics.raptor_queries || 0;
+            document.getElementById('errorRate').textContent = appMetrics.error_rate_percent?.toFixed(1) + '%' || '0%';
+            document.getElementById('totalErrors').textContent = `Errors: ${appMetrics.total_errors || 0}`;
+            
+            // Session Stats
+            const sessionStats = metrics.session_stats || {};
+            document.getElementById('totalSessions').textContent = `Sessions: ${sessionStats.active_sessions || 0}`;
+            
+            // Calculate query rate (queries per minute)
+            if (lastMetrics) {
+                const timeDiff = (new Date() - lastMetrics.timestamp) / 1000 / 60; // minutes
+                const queryDiff = (appMetrics.raptor_queries || 0) - (lastMetrics.application_metrics?.raptor_queries || 0);
+                const queryRate = timeDiff > 0 ? (queryDiff / timeDiff).toFixed(1) : '0';
+                document.getElementById('queryRate').textContent = `Rate: ${queryRate}/min`;
+            }
+            
+            // System Resources
+            const systemResources = metrics.system_resources || {};
+            updateSystemResources(systemResources);
+            
+            // RAPTOR Metrics
+            const raptorMetrics = metrics.raptor_metrics || {};
+            updateRaptorStatus(raptorMetrics);
+            
+            // Redis Metrics
+            const redisMetrics = metrics.redis_metrics || {};
+            updateRedisStatus(redisMetrics);
+            
+            // Update charts
+            updateCharts(systemResources, appMetrics);
+            
+            // Update activity log
+            updateActivityLog(metrics);
+            
+            // Update alerts
+            updateSystemAlerts(metrics);
+            
+            lastMetrics = { ...metrics, timestamp: new Date() };
+        }
+
+        // Update health status
+        function updateHealthStatus(health) {
+            const status = health.status || 'unknown';
+            const score = health.health_score || 0;
+            
+            const statusEl = document.getElementById('healthStatus');
+            const scoreEl = document.getElementById('healthScore');
+            
+            statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            scoreEl.textContent = `Score: ${score}`;
+            
+            // Color coding
+            statusEl.className = `text-2xl font-bold health-${status}`;
+        }
+
+        // Update system resources
+        function updateSystemResources(resources) {
+            const memoryPercent = resources.memory_usage_percent || 0;
+            const cpuPercent = resources.cpu_usage_percent || 0;
+            const memoryAvailable = resources.memory_available_gb || 0;
+            
+            document.getElementById('memoryPercent').textContent = memoryPercent.toFixed(1) + '%';
+            document.getElementById('cpuPercent').textContent = cpuPercent.toFixed(1) + '%';
+            document.getElementById('memoryDetails').textContent = `${memoryAvailable.toFixed(1)} GB available`;
+            
+            // Update progress bars
+            const memoryBar = document.getElementById('memoryBar');
+            const cpuBar = document.getElementById('cpuBar');
+            
+            memoryBar.style.width = memoryPercent + '%';
+            cpuBar.style.width = cpuPercent + '%';
+            
+            // Color coding for bars
+            memoryBar.className = getProgressBarClass(memoryPercent);
+            cpuBar.className = getProgressBarClass(cpuPercent);
+        }
+
+        // Update RAPTOR status
+        function updateRaptorStatus(raptorMetrics) {
+            const performance = raptorMetrics.performance_summary || {};
+            const pipeline = performance.pipeline || {};
+            const retriever = performance.retriever || {};
+            const treeStats = performance.tree_stats || {};
+            
+            document.getElementById('treeNodes').textContent = treeStats.total_nodes || '--';
+            document.getElementById('treeLayers').textContent = treeStats.tree_layers || '--';
+            document.getElementById('cacheHitRate').textContent = (retriever.cache_hit_rate * 100).toFixed(1) + '%' || '--%';
+            document.getElementById('avgQueryTime').textContent = (pipeline.avg_query_time * 1000).toFixed(0) + 'ms' || '--ms';
+        }
+
+        // Update Redis status
+        function updateRedisStatus(redisMetrics) {
+            const indicator = document.getElementById('redisIndicator');
+            const text = document.getElementById('redisText');
+            const details = document.getElementById('redisDetails');
+            
+            if (redisMetrics.status === 'error') {
+                indicator.className = 'status-indicator status-critical';
+                text.textContent = 'Error';
+                details.textContent = redisMetrics.message || 'Connection failed';
+            } else {
+                indicator.className = 'status-indicator status-healthy';
+                text.textContent = 'Connected';
+                details.textContent = `Memory: ${redisMetrics.used_memory_mb || 0} MB`;
+            }
+        }
+
+        // Update charts
+        function updateCharts(systemResources, appMetrics) {
+            const now = new Date().toLocaleTimeString();
+            const memoryPercent = systemResources.memory_usage_percent || 0;
+            const avgResponseTime = (appMetrics.total_requests > 0) ? 
+                (appMetrics.total_query_time / appMetrics.total_requests * 1000) : 0;
+            
+            // Memory chart
+            if (memoryData.labels.length >= 20) {
+                memoryData.labels.shift();
+                memoryData.datasets[0].data.shift();
+            }
+            memoryData.labels.push(now);
+            memoryData.datasets[0].data.push(memoryPercent);
+            memoryChart.update('none');
+            
+            // Response time chart
+            if (responseData.labels.length >= 20) {
+                responseData.labels.shift();
+                responseData.datasets[0].data.shift();
+            }
+            responseData.labels.push(now);
+            responseData.datasets[0].data.push(avgResponseTime);
+            responseChart.update('none');
+        }
+
+        // Update activity log
+        function updateActivityLog(metrics) {
+            const health = metrics.health_status || {};
+            const appMetrics = metrics.application_metrics || {};
+            
+            // Add new activity
+            const activities = [
+                {
+                    time: new Date().toLocaleTimeString(),
+                    message: `Health: ${health.status || 'Unknown'}`,
+                    type: 'info'
+                },
+                {
+                    time: new Date().toLocaleTimeString(),
+                    message: `Active connections: ${appMetrics.active_websocket_connections || 0}`,
+                    type: 'info'
+                }
+            ];
+            
+            const logEl = document.getElementById('activityLog');
+            if (activityBuffer.length === 0) {
+                logEl.innerHTML = '';
+            }
+            
+            activities.forEach(activity => {
+                if (activityBuffer.length >= 10) {
+                    activityBuffer.shift();
+                }
+                activityBuffer.push(activity);
+            });
+            
+            // Update display
+            logEl.innerHTML = activityBuffer.slice(-5).map(activity => `
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-300">${activity.message}</span>
+                    <span class="text-gray-500">${activity.time}</span>
+                </div>
+            `).join('');
+        }
+
+        // Update system alerts
+        function updateSystemAlerts(metrics) {
+            const health = metrics.health_status || {};
+            const issues = health.issues || [];
+            const systemResources = metrics.system_resources || {};
+            
+            const alerts = [];
+            
+            // Health issues
+            issues.forEach(issue => {
+                alerts.push({
+                    type: 'warning',
+                    message: issue,
+                    time: new Date().toLocaleTimeString()
+                });
+            });
+            
+            // Resource alerts
+            if (systemResources.memory_usage_percent > 90) {
+                alerts.push({
+                    type: 'critical',
+                    message: 'Critical memory usage',
+                    time: new Date().toLocaleTimeString()
+                });
+            } else if (systemResources.memory_usage_percent > 80) {
+                alerts.push({
+                    type: 'warning',
+                    message: 'High memory usage',
+                    time: new Date().toLocaleTimeString()
+                });
+            }
+            
+            const alertsEl = document.getElementById('systemAlerts');
+            
+            if (alerts.length === 0) {
+                alertsEl.innerHTML = '<div class="text-green-400 text-sm text-center py-4">✅ All systems normal</div>';
+            } else {
+                alertsEl.innerHTML = alerts.slice(0, 5).map(alert => `
+                    <div class="flex items-center space-x-2 p-2 rounded ${alert.type === 'critical' ? 'bg-red-900' : 'bg-yellow-900'} bg-opacity-50">
+                        <i class="fas ${alert.type === 'critical' ? 'fa-exclamation-circle text-red-400' : 'fa-exclamation-triangle text-yellow-400'}"></i>
+                        <div class="flex-1">
+                            <p class="text-white text-sm">${alert.message}</p>
+                            <p class="text-gray-400 text-xs">${alert.time}</p>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Helper functions
+        function getProgressBarClass(percent) {
+            if (percent > 90) return 'h-2 rounded-full transition-all duration-500 bg-red-500';
+            if (percent > 80) return 'h-2 rounded-full transition-all duration-500 bg-yellow-500';
+            return 'h-2 rounded-full transition-all duration-500 bg-green-500';
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            const icon = document.getElementById('notificationIcon');
+            const text = document.getElementById('notificationText');
+            
+            const iconMap = {
+                success: 'fa-check-circle text-green-400',
+                error: 'fa-exclamation-circle text-red-400',
+                warning: 'fa-exclamation-triangle text-yellow-400',
+                info: 'fa-info-circle text-blue-400'
+            };
+            
+            icon.className = `fas ${iconMap[type]}`;
+            text.textContent = message;
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
+        }
+
+        // Action handlers
+        async function clearCache() {
+            try {
+                showNotification('Clearing cache...', 'info');
+                const response = await fetch('http://localhost:8000/cache/clear', { 
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Cache clear result:', result);
+                
+                if (result.status === 'success') {
+                    showNotification(`Cache cleared successfully! Freed ${result.cleared_items.redis_cache + result.cleared_items.raptor_cache + result.cleared_items.embedding_cache} items`, 'success');
+                } else {
+                    showNotification('Cache clear failed: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Cache clear error:', error);
+                showNotification('Error clearing cache: ' + error.message, 'error');
+            }
+        }
+
+        async function optimizeRaptor() {
+            try {
+                showNotification('Optimizing RAPTOR...', 'info');
+                const response = await fetch('http://localhost:8000/raptor/optimize', { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                console.log('RAPTOR optimization result:', result);
+                
+                if (result.status === 'success') {
+                    const recommendations = result.recommendations ? ` Recommendations: ${result.recommendations.join(', ')}` : '';
+                    showNotification(`RAPTOR optimization completed!${recommendations}`, 'success');
+                    
+                    // Refresh metrics after optimization
+                    setTimeout(fetchMetrics, 2000);
+                } else {
+                    showNotification('Optimization failed: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('RAPTOR optimization error:', error);
+                showNotification('Error optimizing RAPTOR: ' + error.message, 'error');
+            }
+        }
+
+        async function showMemoryUsage() {
+            try {
+                showNotification('Fetching memory details...', 'info');
+                const response = await fetch('http://localhost:8000/memory/usage');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Memory usage details:', data);
+                
+                // Create detailed memory info
+                const memoryInfo = `
+System Memory: ${data.system_memory?.used_gb?.toFixed(1)}GB / ${data.system_memory?.total_gb?.toFixed(1)}GB (${data.system_memory?.usage_percent?.toFixed(1)}%)
+Available: ${data.system_memory?.available_gb?.toFixed(1)}GB
+Process Memory: ${data.process_memory?.rss_mb?.toFixed(1)}MB (${data.process_memory?.percent?.toFixed(1)}%)
+Redis Memory: ${data.redis_memory?.used_memory_mb?.toFixed(1)}MB
+RAPTOR Tree: ${data.raptor_memory?.tree_nodes || 'N/A'} nodes
+Alerts: ${data.memory_alerts?.length || 0} active
+                `.trim();
+                
+                alert('Memory Usage Details:\n\n' + memoryInfo);
+                showNotification('Memory details displayed', 'success');
+            } catch (error) {
+                console.error('Memory usage error:', error);
+                showNotification('Error fetching memory details: ' + error.message, 'error');
+            }
+        }
+
+        function viewSessions() {
+            // Redirect to session management page
+            window.location.href = 'session-management.html';
+        }
+    </script>
+</body>
+</html>
