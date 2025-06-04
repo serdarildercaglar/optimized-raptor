@@ -1,461 +1,763 @@
-# 🌳 RAPTOR - Recursive Abstractive Processing for Tree-Organized Retrieval
+
+# 🌳 RAPTOR Production Suite
 
 <div align="center">
-
-![RAPTOR Logo](https://img.shields.io/badge/RAPTOR-Tree--Based%20RAG-green?style=for-the-badge)
+![RAPTOR Logo](https://img.shields.io/badge/RAPTOR-Production%20Ready-green?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python)
-![OpenAI](https://img.shields.io/badge/OpenAI-API-orange?style=for-the-badge&logo=openai)
+![FastAPI](https://img.shields.io/badge/FastAPI-Modern-green?style=for-the-badge&logo=fastapi)
+![Redis](https://img.shields.io/badge/Redis-Caching-red?style=for-the-badge&logo=redis)
 
-**Production-Ready Implementation with Enterprise-Level Optimizations**
+**Enterprise-Grade Hierarchical RAG System**
+
+[🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [🔧 Configuration](#%EF%B8%8F-configuration) • [📊 Monitoring](#-monitoring) • [❓ FAQ](#-faq)
 
 </div>
+---
+
+
+---
 
 ## 📋 Table of Contents
 
-- [🌟 Features](#-features)
-- [🚀 Quick Start](#-quick-start)
-- [📦 Installation](#-installation)
-- [⚡ Usage Examples](#-usage-examples)
-- [🔧 Configuration](#-configuration)
-- [🎯 Performance Tips](#-performance-tips)
-- [❓ FAQ](#-faq)
+* [🎯 About](#-about)
+* [⭐ Features](#-features)
+* [🚀 Quick Start](#-quick-start)
+* [📁 Project Structure](#-project-structure)
+* [📖 Documentation](#-documentation)
+* [🔧 Configuration](#%EF%B8%8F-configuration)
+* [📊 Monitoring](#-monitoring)
+* [⚡ Performance](#-performance)
+* [❓ FAQ](#-faq)
 
-## 🌟 Features
+---
 
-### 🎯 **Core RAPTOR Capabilities**
-- **Hierarchical Tree Structure**: Multi-layer document representation
-- **Semantic Clustering**: Groups related content intelligently
-- **Recursive Summarization**: Preserves context at all levels
-- **Flexible Retrieval**: Tree traversal + collapsed tree methods
+## 🎯 About
 
-### ⚡ **Enterprise Optimizations**
-- **Async Pipeline**: ~10x faster processing
-- **Smart Caching**: 80%+ query speedup
-- **Batch Processing**: 100x embedding efficiency
-- **Quality-Focused**: Adaptive clustering with fallbacks
-- **Real-time Monitoring**: Progress tracking + performance metrics
+**RAPTOR Production Suite** is an enterprise-grade implementation of Stanford's RAPTOR (Recursive Abstractive Processing for Tree-Organized Retrieval) approach, designed for production environments with advanced caching, monitoring, and deployment capabilities.
+
+### 🤔 What Does It Do?
+
+1. **Hierarchical Document Processing** : Creates multi-layer tree structures from documents
+2. **Intelligent RAG System** : Provides context-aware question answering
+3. **Real-time WebSocket API** : Streams responses with tool calls and progress tracking
+4. **Production Monitoring** : Comprehensive metrics, health checks, and analytics
+5. **Environment-based Configuration** : Development/Staging/Production settings
+
+### 🏗️ How It Works?
+
+```
+📄 Documents → 🌳 RAPTOR Tree → 🔍 Smart Retrieval → 🤖 AI Response → 💬 User
+    ↓              ↓                ↓                ↓             ↓
+  Chunks      Hierarchical     Context-Aware    Streaming      Real-time
+            Summarization       Search         Response        Chat
+```
+
+---
+
+## ⭐ Features
+
+### 🚀 **Core RAPTOR Features**
+
+* ✅  **Hierarchical Document Understanding** : Multi-layer tree construction with clustering
+* ✅  **Async Processing** : Fully asynchronous operations with concurrent handling
+* ✅  **Advanced Caching** : Query similarity-based caching with Redis backend
+* ✅  **Adaptive Retrieval** : Smart parameter adjustment based on query characteristics
+* ✅  **Early Termination** : Performance optimization for faster responses
+
+### 🏢 **Production Features**
+
+* ✅  **Real-time WebSocket API** : Streaming responses with progress tracking
+* ✅  **Environment Management** : Development/Staging/Production configurations
+* ✅  **Health Monitoring** : System health checks and status endpoints
+* ✅  **Performance Analytics** : Real-time metrics and historical analysis
+* ✅  **Load Testing** : Built-in performance testing tools
+* ✅  **Redis Integration** : Caching and session management
+
+### 📊 **Monitoring & Analytics**
+
+* ✅  **Live Metrics** : Real-time performance monitoring via HTTP endpoints
+* ✅  **Historical Data** : Performance trends and analytics
+* ✅  **Resource Tracking** : Memory, CPU, and cache efficiency monitoring
+* ✅  **Error Tracking** : Error logging and analysis
+* ✅  **Cache Management** : Memory and Redis cache monitoring
+
+### 🔧 **Technical Features**
+
+* ✅  **Multiple Embedding Models** : OpenAI, SentenceTransformers, Custom models
+* ✅  **Batch Processing** : Optimized embedding and summarization operations
+* ✅  **Memory Management** : Cache cleanup and garbage collection
+* ✅  **Configuration Management** : Environment-based settings with validation
+* ✅  **Docker Support** : Basic containerization support
+
+---
 
 ## 🚀 Quick Start
 
-### 1️⃣ **Install & Setup**
+### 1️⃣ **Prerequisites**
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd raptor
+# Python 3.8+ required
+python --version
+
+# Required for memory monitoring (optional)
+pip install psutil
+```
+
+### 2️⃣ **Installation**
+
+```bash
+# Clone repository
+git clone <your-repo-url>
+cd raptor-production
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate   # Windows
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Set up OpenAI API key
-export OPENAI_API_KEY="your-api-key-here"
-# or create .env file:
-echo "OPENAI_API_KEY=your-api-key-here" > .env
 ```
 
-### 2️⃣ **Prepare Your Data**
+### 3️⃣ **Environment Setup**
 
 ```bash
-# Create your data file
-echo "Your document content here..." > data.txt
+# Create environment file
+cp .env.example .env
+
+# Edit with your settings
+nano .env
 ```
 
-### 3️⃣ **Build & Query in 30 Seconds**
+Required `.env` variables:
+
+```env
+OPENAI_API_KEY=sk-your-actual-openai-key-here
+REDIS_PASSWORD=your-secure-password
+RAPTOR_ENV=development
+```
+
+### 4️⃣ **Build RAPTOR Tree**
+
+```bash
+# Prepare your document
+echo "Your document content here..." > data.txt
+
+# Build RAPTOR tree with production optimizations
+python build-raptor-production.py data.txt --profile balanced
+```
+
+### 5️⃣ **Start Server**
+
+```bash
+# Development server
+python generic-qa-server.py
+
+# Or production deployment with auto Redis setup
+python deploy-raptor-production.py --env production
+```
+
+### 6️⃣ **Test**
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Open web interface
+open test.html  # In your browser
+```
+
+---
+
+## 📁 Project Structure
+
+```
+raptor-production/
+├── 📜 CORE FILES
+│   ├── README.md                       # This file
+│   ├── requirements.txt                # Python dependencies
+│   ├── .env.example                    # Environment template
+│   └── data.txt                        # Sample document
+│
+├── 🌳 RAPTOR LIBRARY
+│   ├── raptor/
+│   │   ├── tree_retriever.py           # Main retrieval system
+│   │   ├── cluster_tree_builder.py     # Tree construction
+│   │   ├── EmbeddingModels.py          # Embedding models
+│   │   ├── tree_structures.py          # Tree data structures
+│   │   ├── utils.py                    # Utility functions
+│   │   ├── cluster_utils.py            # Clustering algorithms
+│   │   ├── tree_builder.py             # Base tree builder
+│   │   ├── Retrievers.py               # Base retriever interface
+│   │   ├── QAModels.py                 # Question answering models
+│   │   ├── SummarizationModels.py      # Summarization models
+│   │   ├── FaissRetriever.py           # FAISS-based retrieval
+│   │   ├── RetrievalAugmentation.py    # Main RA system
+│   │   └── __init__.py                 # Package initialization
+│
+├── 🚀 PRODUCTION SCRIPTS
+│   ├── generic-qa-server.py            # Main WebSocket server
+│   ├── build-raptor-production.py      # Production tree builder
+│   ├── production-config.py            # Configuration manager
+│   ├── deploy-raptor-production.py     # Deployment automation
+│   └── performance-optimizer.py        # Load testing & optimization
+│
+├── ⚙️ CONFIGURATION
+│   ├── config/                         # Auto-generated config files
+│   └── .env                            # Environment variables (create this)
+│
+├── 📊 WEB INTERFACE & RESULTS
+│   ├── test.html                       # Web chat interface
+│   └── performance_results.json        # Performance test results
+│
+└── 🌳 RAPTOR DATA (auto-generated)
+    └── vectordb/
+        ├── raptor-production           # Built tree file
+        └── raptor-production_metrics.json # Build metrics
+```
+
+---
+
+## 📖 Documentation
+
+### 🔧 **Building RAPTOR Trees**
+
+#### Basic Build
+
+```python
+# Command line
+python build-raptor-production.py your_document.txt
+
+# Or programmatically
+from build_raptor_production import build_raptor_production
+
+result = build_raptor_production(
+    data_path="your_document.txt",
+    output_path="vectordb/my-tree"
+)
+```
+
+#### Advanced Build with Configuration
+
+```python
+# Performance profiles: "speed", "balanced", "quality", "memory"
+result = build_raptor_production(
+    data_path="large_document.txt",
+    output_path="vectordb/optimized-tree",
+    performance_profile="speed",
+    force_rebuild=True
+)
+
+print(f"Build time: {result['metrics']['total_time_seconds']:.1f}s")
+print(f"Nodes created: {result['tree_stats']['nodes']}")
+```
+
+### 🔍 **Using RAPTOR for Retrieval**
+
+#### Basic Usage
 
 ```python
 from raptor import RetrievalAugmentation, RetrievalAugmentationConfig
+from raptor import CustomEmbeddingModel, GPT41SummarizationModel
 
-# 🔥 One-line setup with optimized defaults
-RA = RetrievalAugmentation()
+# Configuration
+config = RetrievalAugmentationConfig(
+    embedding_model=CustomEmbeddingModel(),
+    summarization_model=GPT41SummarizationModel(),
+    enable_caching=True,
+    enable_async=True
+)
 
-# 📄 Load your document
-with open('data.txt', 'r', encoding='utf-8') as f:
-    text = f.read()
+# Load tree
+RA = RetrievalAugmentation(tree="vectordb/raptor-production", config=config)
 
-# 🏗️ Build the tree (with real-time progress)
-RA.add_documents(text)
+# Retrieve context
+context = RA.retrieve("What is this document about?")
+print(context)
+```
 
-# 🤖 Ask questions
-answer = RA.answer_question("What is this document about?")
+#### Advanced Retrieval
+
+```python
+# Async retrieval with custom parameters
+import asyncio
+
+async def advanced_retrieve():
+    context, layer_info = await RA.retrieve_async(
+        "Complex question requiring detailed analysis",
+        top_k=10,
+        max_tokens=5000,
+        collapse_tree=False,
+        return_layer_information=True
+    )
+    return context, layer_info
+
+# Run async
+context, layers = asyncio.run(advanced_retrieve())
+```
+
+### 🤖 **Question Answering**
+
+#### Basic QA
+
+```python
+# Simple question answering
+answer = RA.answer_question("What are the main points?")
 print(answer)
 ```
 
-## 📦 Installation
-
-### **Requirements**
-- Python 3.8+
-- OpenAI API key
-- 4GB+ RAM (for large documents)
-
-### **Step-by-Step Installation**
-
-```bash
-# 1. Create virtual environment (recommended)
-python -m venv raptor-env
-source raptor-env/bin/activate  # Linux/Mac
-# raptor-env\Scripts\activate    # Windows
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Verify installation
-python -c "import raptor; print('✅ RAPTOR installed successfully!')"
-```
-
-### **Dependencies Overview**
-```txt
-# Core ML libraries
-torch                  # Neural networks
-transformers>=4.52.4   # HuggingFace models
-sentence-transformers  # Embedding models
-openai>=1.82.1        # OpenAI API
-
-# Scientific computing
-numpy>=1.26.3         # Numerical operations
-scikit-learn>=1.6.1   # ML algorithms
-umap-learn>=0.5.7     # Dimensionality reduction
-
-# Utilities
-tiktoken>=0.9.0       # Tokenization
-tenacity>=9.1.2       # Retry logic
-fastapi>=0.115.12     # Web API (optional)
-```
-
-## ⚡ Usage Examples
-
-### 🎯 **Basic Usage**
+#### Batch Question Answering
 
 ```python
-from raptor import RetrievalAugmentation
-
-# Simple setup
-RA = RetrievalAugmentation()
-
-# Load document
-with open('data.txt', 'r') as f:
-    text = f.read()
-
-# Build tree
-RA.add_documents(text)
-
-# Ask questions
-answer = RA.answer_question("Summarize the main points")
-print(f"Answer: {answer}")
-```
-
-### 🚀 **Optimized Configuration**
-
-```python
-from raptor import RetrievalAugmentation, RetrievalAugmentationConfig
-from raptor import GPT4OSummarizationModel
-from raptor.EmbeddingModels import CustomEmbeddingModel
-
-# Initialize optimized models
-embed_model = CustomEmbeddingModel()
-sum_model = GPT4OSummarizationModel()
-
-# Create optimized configuration
-config = RetrievalAugmentationConfig(
-    # 🏗️ Tree Building Optimizations
-    tb_max_tokens=100,              # Chunk size
-    tb_summarization_length=400,    # Summary length
-    tb_num_layers=5,                # Tree depth
-    tb_batch_size=100,              # Batch processing
-    tb_build_mode="async",          # Async building
-    
-    # 🔍 Retrieval Optimizations
-    tr_enable_caching=True,         # Smart caching
-    tr_adaptive_retrieval=True,     # Auto-tuning
-    tr_early_termination=True,      # Confidence stopping
-    
-    # ⚡ Performance Features
-    enable_async=True,              # Async pipeline
-    enable_metrics=True,            # Performance monitoring
-    max_concurrent_operations=10,   # Parallelization
-    cache_ttl=3600,                # 1-hour cache
-    
-    # 🤖 Models
-    summarization_model=sum_model,
-    embedding_model=embed_model,
-)
-
-# Initialize with config
-RA = RetrievalAugmentation(config=config)
-```
-
-### 📊 **Progress Tracking**
-
-```python
-def progress_callback(progress):
-    print(f"📊 Layer {progress.current_layer}/{progress.total_layers} "
-          f"({progress.layer_progress:.1%}) | "
-          f"Time: {progress.elapsed_time:.1f}s")
-
-# Set progress callback
-RA.set_progress_callback(progress_callback)
-
-# Build with real-time updates
-RA.add_documents(text)
-```
-
-### 🔍 **Advanced Retrieval**
-
-```python
-# Context-only retrieval
-context = RA.retrieve(
-    question="What are the key findings?",
-    max_tokens=2000,
-    collapse_tree=True
-)
-
-# Question answering with layer info
-answer, layer_info = RA.answer_question(
-    question="Explain the methodology",
-    return_layer_information=True,
-    max_tokens=3000
-)
-
-print(f"Answer: {answer}")
-print(f"Retrieved from {len(layer_info)} tree nodes")
-```
-
-### 📈 **Performance Monitoring**
-
-```python
-# Get comprehensive performance stats
-stats = RA.get_performance_summary()
-
-print("📊 Performance Summary:")
-print(f"├── Build Time: {stats['pipeline']['build_time']:.1f}s")
-print(f"├── Cache Hit Rate: {stats['retriever']['cache_hit_rate']:.1%}")
-print(f"├── Avg Query Time: {stats['pipeline']['avg_query_time']:.3f}s")
-print(f"└── Nodes Created: {stats['tree_stats']['total_nodes']}")
-```
-
-### 💾 **Save & Load Trees**
-
-```python
-# Save tree with metadata
-RA.save("my_raptor_tree", include_metadata=True)
-
-# Load saved tree
-RA_loaded = RetrievalAugmentation(
-    config=config,
-    tree="my_raptor_tree"
-)
-
-# Ready to query immediately
-answer = RA_loaded.answer_question("Quick question?")
-```
-
-## 🔧 Configuration
-
-### 📝 **Document Size-Based Optimization**
-
-```python
-def get_optimized_config(document_size):
-    """Auto-configure based on document size"""
-    
-    if document_size < 10_000:  # Small docs (<10KB)
-        return RetrievalAugmentationConfig(
-            tb_max_tokens=150,
-            tb_summarization_length=200,
-            tb_num_layers=3,
-            tb_batch_size=50
-        )
-    
-    elif document_size < 100_000:  # Medium docs (10-100KB)  
-        return RetrievalAugmentationConfig(
-            tb_max_tokens=120,
-            tb_summarization_length=400,
-            tb_num_layers=4,
-            tb_batch_size=100
-        )
-    
-    else:  # Large docs (>100KB)
-        return RetrievalAugmentationConfig(
-            tb_max_tokens=100,
-            tb_summarization_length=512,
-            tb_num_layers=5,
-            tb_batch_size=150
-        )
-
-# Usage
-with open('data.txt', 'r') as f:
-    text = f.read()
-
-config = get_optimized_config(len(text))
-RA = RetrievalAugmentation(config=config)
-```
-
-### 🎛️ **Key Configuration Parameters**
-
-| Parameter | Description | Recommended Values |
-|-----------|-------------|-------------------|
-| `tb_max_tokens` | Chunk size | 100-150 for balance |
-| `tb_summarization_length` | Summary size | 200-512 based on depth |
-| `tb_num_layers` | Tree depth | 3-5 layers |
-| `tr_enable_caching` | Smart caching | `True` (always) |
-| `enable_async` | Async processing | `True` for speed |
-| `max_concurrent_operations` | Parallelism | 8-12 for most systems |
-
-## 🎯 Performance Tips
-
-### ⚡ **Speed Optimizations**
-
-```python
-# 🚀 Maximum speed configuration
-speed_config = RetrievalAugmentationConfig(
-    # Async everything
-    enable_async=True,
-    tb_build_mode="async",
-    
-    # Aggressive caching
-    tr_enable_caching=True,
-    cache_ttl=7200,  # 2-hour cache
-    
-    # Batch processing
-    tb_batch_size=150,
-    max_concurrent_operations=12,
-    
-    # Smart termination
-    tr_early_termination=True,
-    tr_adaptive_retrieval=True
-)
-```
-
-### 🎯 **Quality Optimizations**
-
-```python
-# 🎯 Maximum quality configuration
-quality_config = RetrievalAugmentationConfig(
-    # Smaller chunks for better granularity
-    tb_max_tokens=80,
-    
-    # Longer summaries for context preservation
-    tb_summarization_length=600,
-    
-    # More layers for hierarchical understanding
-    tb_num_layers=6,
-    
-    # Quality-focused retrieval
-    tr_threshold=0.4,
-    tr_top_k=10
-)
-```
-
-### 💾 **Memory Optimizations**
-
-```python
-# For large documents or limited memory
-memory_config = RetrievalAugmentationConfig(
-    # Smaller batches
-    tb_batch_size=50,
-    max_concurrent_operations=6,
-    
-    # Shorter cache
-    cache_ttl=1800,  # 30 minutes
-    
-    # Conservative settings
-    tb_max_tokens=80,
-    tr_top_k=5
-)
-```
-
-## ❓ FAQ
-
-### 🤔 **Common Questions**
-
-**Q: How large documents can RAPTOR handle?**
-A: RAPTOR can handle documents from 1KB to 100MB+. Use optimized configurations for large files.
-
-**Q: Do I need a powerful GPU?**
-A: No! RAPTOR works great on CPU. GPU accelerates embedding creation but isn't required.
-
-**Q: How much does it cost with OpenAI API?**
-A: Typically $0.01-$1.00 per document depending on size. Caching reduces ongoing costs significantly.
-
-**Q: Can I use other embedding models?**
-A: Yes! RAPTOR supports multiple embedding models. See `EmbeddingModels.py` for options.
-
-### 🐛 **Troubleshooting**
-
-**Problem: Out of memory errors**
-```python
-# Solution: Reduce batch size and concurrency
-config = RetrievalAugmentationConfig(
-    tb_batch_size=25,
-    max_concurrent_operations=4
-)
-```
-
-**Problem: Slow embedding creation**
-```python
-# Solution: Enable async + increase concurrency
-config = RetrievalAugmentationConfig(
-    enable_async=True,
-    max_concurrent_operations=12
-)
-```
-
-**Problem: Poor answer quality**
-```python
-# Solution: Increase summarization length + layers
-config = RetrievalAugmentationConfig(
-    tb_summarization_length=600,
-    tb_num_layers=6,
-    tr_top_k=10
-)
-```
-
-### 📝 **Example Workflows**
-
-**📄 Document Analysis Pipeline**
-```python
-# 1. Load document
-with open('data.txt', 'r') as f:
-    text = f.read()
-
-# 2. Build optimized tree
-config = get_optimized_config(len(text))
-RA = RetrievalAugmentation(config=config)
-RA.add_documents(text)
-
-# 3. Run analysis queries
+# Process multiple questions
 questions = [
     "What is the main topic?",
     "What are the key findings?", 
-    "What methodology was used?",
-    "What are the conclusions?"
+    "What recommendations are made?"
 ]
 
-results = {}
-for question in questions:
-    results[question] = RA.answer_question(question)
-
-# 4. Save for future use
-RA.save("analysis_tree", include_metadata=True)
+# Async batch processing
+answers = await RA.answer_questions_batch(questions, batch_size=5)
+for i, answer in enumerate(answers):
+    print(f"Q{i+1}: {answer}")
 ```
+
+### 🌐 **WebSocket API Usage**
+
+#### Web Interface
+
+Open `test.html` in your browser for a full-featured chat interface.
+
+#### Python WebSocket Client
+
+```python
+import asyncio
+import websockets
+import json
+
+async def chat_client():
+    uri = "ws://localhost:8000/ws/python_client"
+  
+    async with websockets.connect(uri) as websocket:
+        # Send question
+        await websocket.send("What are the main topics?")
+      
+        # Receive streaming response
+        async for message in websocket:
+            data = json.loads(message)
+          
+            if data['type'] == 'content_chunk':
+                print(data['content'], end='', flush=True)
+            elif data['type'] == 'stream_end':
+                print("\n--- Response complete ---")
+                break
+
+# Run client
+asyncio.run(chat_client())
+```
+
+---
+
+## 🔧 Configuration
+
+### 📝 **Environment Configurations**
+
+The system automatically creates configuration files in `config/` directory:
+
+#### Development (config/development.json)
+
+```json
+{
+  "raptor": {
+    "batch_size": 50,
+    "num_layers": 3,
+    "enable_metrics": false,
+    "max_concurrent_operations": 4
+  },
+  "workers": 1,
+  "monitoring": {
+    "enable_prometheus": false,
+    "log_level": "DEBUG"
+  }
+}
+```
+
+#### Production (config/production.json)
+
+```json
+{
+  "raptor": {
+    "batch_size": 150,
+    "num_layers": 5,
+    "max_concurrent_operations": 12,
+    "cache_ttl": 7200,
+    "enable_caching": true,
+    "adaptive_retrieval": true
+  },
+  "workers": 4,
+  "monitoring": {
+    "log_level": "INFO"
+  }
+}
+```
+
+### ⚙️ **Configuration Management**
+
+```python
+from production_config import get_production_config
+
+# Auto-detect environment from RAPTOR_ENV
+config = get_production_config()
+
+# Specific environment and profile
+config = get_production_config("production", "speed")
+
+# Override specific settings
+config.raptor.batch_size = 200
+config.workers = 8
+```
+
+### 🔧 **Performance Profiles**
+
+| Profile      | Speed  | Quality | Memory | Use Case                          |
+| ------------ | ------ | ------- | ------ | --------------------------------- |
+| `speed`    | ⭐⭐⭐ | ⭐⭐    | ⭐⭐   | Real-time applications            |
+| `balanced` | ⭐⭐   | ⭐⭐⭐  | ⭐⭐   | General purpose                   |
+| `quality`  | ⭐     | ⭐⭐⭐  | ⭐     | Research & analysis               |
+| `memory`   | ⭐⭐   | ⭐⭐    | ⭐⭐⭐ | Resource-constrained environments |
+
+---
+
+## 📊 Monitoring
+
+### 📈 **Available Metrics**
+
+#### System Metrics
+
+* Memory usage and peak consumption
+* CPU utilization
+* Request throughput and response times
+* Error rates and success rates
+
+#### RAPTOR-Specific Metrics
+
+* Cache hit rates and efficiency
+* Retrieval performance
+* Tree query statistics
+* Embedding processing times
+
+#### Session Management
+
+* Active WebSocket connections
+* Chat session analytics
+* User activity tracking
+
+### 📊 **Metrics Endpoints**
+
+```bash
+# Real-time metrics
+curl http://localhost:8000/metrics/live
+
+# Historical performance data (last 24h)
+curl http://localhost:8000/metrics/historical?time_range=24h
+
+# Performance analytics
+curl http://localhost:8000/analytics/performance?time_range=7d
+
+# Memory usage details
+curl http://localhost:8000/memory/usage
+
+# Session management
+curl http://localhost:8000/sessions/list?status=active&limit=50
+```
+
+### 🔧 **Management Endpoints**
+
+```bash
+# Clear all caches
+curl -X DELETE http://localhost:8000/cache/clear
+
+# Optimize RAPTOR performance
+curl -X POST http://localhost:8000/raptor/optimize
+
+# Delete specific chat history
+curl -X DELETE http://localhost:8000/chat_history/session_id
+```
+
+---
+
+## ⚡ Performance
+
+### 🧪 **Load Testing**
+
+```bash
+# Run comprehensive performance test
+python performance-optimizer.py \
+    --server-url http://localhost:8000 \
+    --websocket-url ws://localhost:8000/ws/test_client \
+    --output results.json
+
+# Run test and generate optimization
+python performance-optimizer.py --optimize
+```
+
+### 📊 **Real Performance Results**
+
+Based on actual testing with the included `performance_results.json`:
+
+| Metric                      | HTTP API   | WebSocket Chat |
+| --------------------------- | ---------- | -------------- |
+| **Success Rate**      | 100%       | 54.5%          |
+| **Avg Response Time** | 1.4s       | 0.8s           |
+| **Throughput**        | 12.4 req/s | 0.3 conv/s     |
+| **P95 Response Time** | 3.4s       | 3.3s           |
+| **Memory Usage**      | ~15GB peak | ~15.6GB peak   |
+
+### 📊 **Performance Optimization**
+
+#### Manual Optimization
+
+```python
+# High-performance configuration
+config = RetrievalAugmentationConfig(
+    tb_batch_size=200,                    # Larger batches
+    max_concurrent_operations=16,         # More concurrency
+    tr_enable_caching=True,               # Enable caching
+    tr_early_termination=True,            # Early termination
+    cache_ttl=7200,                       # 2-hour cache
+    tr_adaptive_retrieval=True            # Adaptive parameters
+)
+```
+
+#### Memory Optimization
+
+```python
+# Memory-optimized configuration
+config = RetrievalAugmentationConfig(
+    tb_batch_size=50,                     # Smaller batches
+    max_concurrent_operations=4,          # Less concurrency
+    cache_ttl=1800,                       # 30-minute cache
+    tr_top_k=5                           # Fewer results
+)
+```
+
+---
+
+## ❓ FAQ
+
+### 🤔 **General Questions**
+
+#### **Q: What is RAPTOR and how does it work?**
+
+**A:** RAPTOR creates hierarchical tree structures from documents by recursively clustering and summarizing content at different abstraction levels. This enables better context understanding compared to traditional flat RAG systems.
+
+#### **Q: What document sizes are supported?**
+
+**A:**
+
+* **Minimum** : 1KB (few paragraphs)
+* **Optimal** : 10KB - 1MB
+* **Maximum** : 100MB+ (depends on configuration)
+
+#### **Q: What are the system requirements?**
+
+**A:**
+
+* **Minimum** : 4 CPU cores, 8GB RAM
+* **Recommended** : 8+ CPU cores, 16GB+ RAM
+* **GPU** : Optional (speeds up local embedding models)
+
+### 🔧 **Technical Questions**
+
+#### **Q: How do I process multiple documents?**
+
+**A:**
+
+```python
+documents = ["doc1.txt", "doc2.txt", "doc3.txt"]
+for doc in documents:
+    result = build_raptor_production(
+        data_path=doc,
+        output_path=f"vectordb/tree-{Path(doc).stem}"
+    )
+```
+
+#### **Q: Can I use custom embedding models?**
+
+**A:** Yes! Inherit from `BaseEmbeddingModel`:
+
+```python
+from raptor.EmbeddingModels import BaseEmbeddingModel
+
+class MyCustomModel(BaseEmbeddingModel):
+    def create_embedding(self, text):
+        # Your implementation
+        return embedding_vector
+  
+    async def create_embedding_async(self, text):
+        # Async implementation
+        return await self.create_embedding(text)
+```
+
+#### **Q: How do I scale for production?**
+
+**A:**
+
+```bash
+# Set environment variables
+export MAX_WORKERS=8
+export RAPTOR_BATCH_SIZE=200
+export RAPTOR_ENV=production
+
+# Use production deployment
+python deploy-raptor-production.py --env production
+```
+
+### 🚀 **Deployment Questions**
+
+#### **Q: How do I monitor performance in production?**
+
+**A:**
+
+```bash
+# Real-time system health
+curl http://localhost:8000/health
+
+# Live performance metrics
+curl http://localhost:8000/metrics/live
+
+# Memory usage analysis
+curl http://localhost:8000/memory/usage
+
+# Performance analytics dashboard
+curl http://localhost:8000/analytics/performance
+```
+
+#### **Q: How do I handle Redis setup?**
+
+**A:** The deployment script automatically handles Redis:
+
+```bash
+# Automatic Redis setup and RAPTOR deployment
+python deploy-raptor-production.py --env production
+```
+
+#### **Q: How do I optimize memory usage?**
+
+**A:**
+
+```bash
+# Use memory-optimized profile
+python build-raptor-production.py data.txt --profile memory
+
+# Or set environment variables
+export RAPTOR_BATCH_SIZE=50
+export MAX_CONCURRENT_OPERATIONS=4
+```
+
+### 💡 **Performance Questions**
+
+#### **Q: How can I improve response times?**
+
+**A:**
+
+1. **Enable Early Termination** : Use `--profile speed`
+2. **Increase Concurrent Operations** : Set `MAX_CONCURRENT_OPERATIONS=16`
+3. **Optimize Cache Settings** : Set longer `cache_ttl`
+4. **Use Async Operations** : Enable `enable_async=True`
+
+#### **Q: My WebSocket connections are failing. What should I do?**
+
+**A:**
+
+1. **Check Server Health** : `curl http://localhost:8000/health`
+2. **Verify Redis** : Ensure Redis is running
+3. **Check Logs** : Look for errors in console output
+4. **Test Simple Connection** : Use the included `test.html`
+
+### 🔒 **Security Questions**
+
+#### **Q: How do I secure API keys?**
+
+**A:**
+
+```bash
+# Use environment variables
+export OPENAI_API_KEY="your-key"
+
+# For production, use secrets management
+# Never commit keys to version control
+```
+
+#### **Q: How do I clear sensitive chat data?**
+
+**A:**
+
+```bash
+# Clear all caches
+curl -X DELETE http://localhost:8000/cache/clear
+
+# Delete specific session
+curl -X DELETE http://localhost:8000/chat_history/session_id
+```
+
+### 📞 **Support & Help**
+
+#### **Q: How do I troubleshoot issues?**
+
+**A:**
+
+1. **Check Health** : `curl http://localhost:8000/health`
+2. **View Logs** : Check console output for errors
+3. **Test Performance** : `python performance-optimizer.py`
+4. **Verify Environment** : Check `.env` file settings
+
+#### **Q: The performance tests show poor results. What should I do?**
+
+**A:**
+
+1. **Check System Resources** : Monitor memory and CPU usage
+2. **Optimize Configuration** : Try different performance profiles
+3. **Verify RAPTOR Tree** : Ensure tree was built successfully
+4. **Check Network** : Verify WebSocket connectivity
+
+---
+
+## 🎯 Best Practices
+
+### 🏗️ **Development Best Practices**
+
+1. **Test with small documents first**
+2. **Use development environment for testing**
+3. **Monitor resource usage during development**
+4. **Keep logs for debugging**
+5. **Use appropriate performance profiles**
+
+### 🚀 **Production Best Practices**
+
+1. **Enable comprehensive monitoring**
+2. **Set up automated health checks**
+3. **Use Redis for optimal performance**
+4. **Implement proper error handling**
+5. **Regular cache cleanup and optimization**
+
+### 🔒 **Security Best Practices**
+
+1. **Use environment variables for secrets**
+2. **Implement session management**
+3. **Monitor access patterns**
+4. **Regular cache cleanup for privacy**
+5. **Use secure Redis passwords**
 
 ---
 
 <div align="center">
+## 🎉 Ready to Build Amazing RAG Applications!
 
-**🎉 Ready to get started? Create your `data.txt` and run the Quick Start example!**
+**RAPTOR Production Suite provides a solid foundation for enterprise-grade hierarchical RAG systems.**
 
-**🤝 Need help? Check our examples or open an issue.**
+[⭐ Star this repo]() • [🐛 Report Bug]() • [💡 Request Feature]() • [📖 Documentation]()
+
+**Built for Production AI Applications**
 
 </div>
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Original RAPTOR paper by Stanford University
-- OpenAI for GPT models
-- HuggingFace for transformer models
-- All contributors and the open-source community
