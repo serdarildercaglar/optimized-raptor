@@ -423,7 +423,14 @@ def build_raptor_production(
             # Build tree
             logger.info("🏗️ Building RAPTOR tree...")
             RA.add_documents(text)
-            
+
+            # CACHE OPTIMIZATION EKLE (build sonrası)
+            if RA.retriever and RA.retriever.query_cache:
+                RA.retriever.query_cache.similarity_threshold = 0.80
+                RA.retriever.query_cache.ttl = 14400
+                logger.info("🔧 Cache optimized: similarity_threshold=0.80, ttl=14400s")
+            else:
+                logger.warning("⚠️ Cache optimization failed - retriever or query_cache not available")            
             # Collect final metrics
             perf_summary = RA.get_performance_summary()
             

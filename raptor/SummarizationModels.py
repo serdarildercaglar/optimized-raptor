@@ -44,6 +44,35 @@ class GPT41SummarizationModel(BaseSummarizationModel):
             return e
 
 
+class O3SummarizationModel(BaseSummarizationModel):
+    def __init__(self, model="o3"):
+
+        self.model = model
+
+    @retry(wait=wait_random_exponential(min=1, max=20), stop=stop_after_attempt(6))
+    def summarize(self, context, max_tokens=500, stop_sequence=None):
+
+        try:
+            client = OpenAI()
+
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {
+                        "role": "user",
+                        "content": f"Write a summary of the following, including as many key details as possible: {context}:",
+                    },
+                ],
+                max_tokens=max_tokens,
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+            print(e)
+            return e
+
 class GPT41MiniSummarizationModel(BaseSummarizationModel):
     def __init__(self, model="gpt-4.1-mini"):
 

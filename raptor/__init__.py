@@ -11,6 +11,7 @@ from .SummarizationModels import (BaseSummarizationModel,
                                   GPT4OSummarizationModel,
                                   GPT41MiniSummarizationModel,
                                   GPT41SummarizationModel,
+                                  O3SummarizationModel
                                   )
 from .tree_builder import TreeBuilder, TreeBuilderConfig
 from .tree_retriever import TreeRetriever, TreeRetrieverConfig
