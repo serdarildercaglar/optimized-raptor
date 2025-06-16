@@ -7,3 +7,7 @@ __pycache__
 *.log
 *.json
 raptor-production
+# Python bytecode ve cache dosyaları
+__pycache__/
+**/__pycache__/
+*.py[cod]
