@@ -175,7 +175,7 @@ class RetrievalAugmentationConfig:
         self.enable_progress_tracking = enable_progress_tracking
         
         if max_concurrent_operations is None:
-            max_concurrent_operations = 10
+            max_concurrent_operations = 32
         self.max_concurrent_operations = max_concurrent_operations
         
         if performance_monitoring is None:

@@ -302,7 +302,7 @@ class TreeRetrieverConfig:
         self.enable_caching = enable_caching
         
         if cache_ttl is None:
-            cache_ttl = 3600  # 1 hour
+            cache_ttl = 14400  # 1 hour
         self.cache_ttl = cache_ttl
         
         if similarity_cache_threshold is None:
@@ -326,7 +326,7 @@ class TreeRetrieverConfig:
         self.confidence_threshold = confidence_threshold
         
         if max_concurrent_retrievals is None:
-            max_concurrent_retrievals = 5
+            max_concurrent_retrievals = 32
         self.max_concurrent_retrievals = max_concurrent_retrievals
 
     def log_config(self):
@@ -543,7 +543,7 @@ class TreeRetriever(BaseRetriever):
         num_layers: int = None,
         top_k: int = 10, 
         max_tokens: int = 3500,
-        collapse_tree: bool = True,
+        collapse_tree: bool = False,
         return_layer_information: bool = False,
         use_async: bool = False,
     ) -> Union[str, Tuple[str, List[Dict]]]:

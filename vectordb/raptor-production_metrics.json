@@ -1,18 +1,18 @@
 {
-  "total_time_seconds": 29.614120960235596,
+  "total_time_seconds": 25.58946919441223,
   "total_documents": 1,
-  "total_chunks": 274,
-  "total_nodes": 284,
+  "total_chunks": 300,
+  "total_nodes": 310,
   "layers_built": 1,
-  "memory_peak_mb": 16892.5078125,
-  "cpu_peak_percent": 21.5,
+  "memory_peak_mb": 13442.49609375,
+  "cpu_peak_percent": 48.3,
   "cache_hit_rate": 0.0,
-  "embedding_efficiency": 0.04438479398704765,
-  "throughput_chunks_per_sec": 9.252342839009604,
+  "embedding_efficiency": 0.05533156587693991,
+  "throughput_chunks_per_sec": 11.723572604058102,
   "build_errors": [
     "Poor retrieval quality for query: What is this document about?",
     "Poor retrieval quality for query: Summarize the main points",
     "Poor retrieval quality for query: Key information"
   ],
-  "timestamp": "2025-06-04T09:40:29.249396"
+  "timestamp": "2025-06-16T17:42:32.224451"
 }

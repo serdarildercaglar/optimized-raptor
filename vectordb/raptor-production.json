@@ -7,13 +7,13 @@
     "max_concurrent_operations": 8,
     "performance_monitoring": true,
     "cache_ttl": 3600,
-    "tree_builder_config": "<raptor.cluster_tree_builder.ClusterTreeConfig object at 0x7aef73258040>",
-    "tree_retriever_config": "<raptor.tree_retriever.TreeRetrieverConfig object at 0x7aef732580a0>",
-    "qa_model": "<raptor.QAModels.GPT41QAModel object at 0x7aef732580d0>",
+    "tree_builder_config": "<raptor.cluster_tree_builder.ClusterTreeConfig object at 0x7d94cee1a9b0>",
+    "tree_retriever_config": "<raptor.tree_retriever.TreeRetrieverConfig object at 0x7d94cee1ae90>",
+    "qa_model": "<raptor.QAModels.GPT41QAModel object at 0x7d94cee1aa10>",
     "tree_builder_type": "cluster"
   },
   "metrics": {
-    "build_time": 22.53023862838745,
+    "build_time": 18.072866439819336,
     "total_queries": 0,
     "avg_query_time": 0.0,
     "cache_hit_rate": 0.0,
@@ -25,17 +25,17 @@
   "progress": {
     "chunk_progress": 0.0,
     "layer_progress": 1.0,
-    "node_progress": 1.0364963503649636,
-    "elapsed_time": 22.545883417129517,
+    "node_progress": 1.0333333333333334,
+    "elapsed_time": 18.094013929367065,
     "current_layer": 1,
     "total_layers": 0,
-    "created_nodes": 284,
-    "total_nodes": 274
+    "created_nodes": 310,
+    "total_nodes": 300
   },
   "tree_stats": {
     "num_layers": 1,
-    "total_nodes": 284,
-    "leaf_nodes": 274,
+    "total_nodes": 310,
+    "leaf_nodes": 300,
     "root_nodes": 10
   }
 }

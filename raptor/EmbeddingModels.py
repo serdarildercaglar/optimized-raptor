@@ -393,11 +393,16 @@ class AsyncCustomEmbeddingModel(BaseEmbeddingModel):
     
     def __init__(self, model_name: str = "intfloat/multilingual-e5-large",
                  cache_enabled: bool = True,
-                 max_batch_size: int = 16):
+                 max_batch_size: int = 128):
         super().__init__(cache_enabled)
         self.model_name_str = model_name
         self.max_batch_size = max_batch_size
         self.model = SentenceTransformer(model_name, trust_remote_code=True)
+        self.model.eval()  # Inference mode
+        if torch.cuda.is_available():
+            torch.backends.cudnn.benchmark = True  # Speed boost
+        self.model.half()  # FP16 - 2x faster, less memory
+    
         self.model.to(device)
         self.model_name = f"Custom_{model_name.split('/')[-1]}"
     
