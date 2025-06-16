@@ -23,7 +23,7 @@ load_dotenv(find_dotenv())
 
 # RAPTOR imports
 from raptor import RetrievalAugmentation, RetrievalAugmentationConfig
-from raptor import GPT41SummarizationModel
+from raptor import O3SummarizationModel
 from raptor.EmbeddingModels import CustomEmbeddingModel
 
 # Logging setup
@@ -289,7 +289,7 @@ def create_production_config(
     
     # Initialize models
     embed_model = CustomEmbeddingModel()
-    sum_model = GPT41SummarizationModel()
+    sum_model = O3SummarizationModel()
     
     return RetrievalAugmentationConfig(
         # Tree building

@@ -18,6 +18,48 @@ class BaseQAModel(ABC):
         pass
 
 
+class O3QAModel(BaseQAModel):
+    def __init__(self, model="gpt-4.1"):
+        """
+        Initializes the GPT-4.1 model with the specified model version.
+
+        Args:
+            model (str, optional): The GPT-4.1 model version to use for generating summaries. Defaults to "gpt-4.1".
+        """
+        self.model = model
+        self.client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+    @retry(wait=wait_random_exponential(min=1, max=20), stop=stop_after_attempt(6))
+    def answer_question(self, context, question, max_tokens=150, stop_sequence=None):
+        """
+        Generates a summary of the given context using the GPT-3 model.
+
+        Args:
+            context (str): The text to summarize.
+            max_tokens (int, optional): The maximum number of tokens in the generated summary. Defaults to 150.
+            stop_sequence (str, optional): The sequence at which to stop summarization. Defaults to None.
+
+        Returns:
+            str: The generated summary.
+        """
+        try:
+            response = self.client.completions.create(
+                prompt=f"using the folloing information {context}. Answer the following question in less than 5-7 words, if possible: {question}",
+                temperature=0,
+                # max_tokens=max_tokens,
+                top_p=1,
+                frequency_penalty=0,
+                presence_penalty=0,
+                stop=stop_sequence,
+                model=self.model,
+            )
+            return response.choices[0].text.strip()
+
+        except Exception as e:
+            print(e)
+            return ""
+
+
 class GPT41QAModel(BaseQAModel):
     def __init__(self, model="gpt-4.1"):
         """

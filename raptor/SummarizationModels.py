@@ -64,7 +64,7 @@ class O3SummarizationModel(BaseSummarizationModel):
                         "content": f"Write a summary of the following, including as many key details as possible: {context}:",
                     },
                 ],
-                max_tokens=max_tokens,
+                # max_tokens=max_tokens,
             )
 
             return response.choices[0].message.content

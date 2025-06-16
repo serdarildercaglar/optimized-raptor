@@ -8,14 +8,14 @@ load_dotenv(find_dotenv())
 
 from raptor import RetrievalAugmentation 
 from raptor import RetrievalAugmentationConfig
-from raptor import GPT41SummarizationModel
-from raptor import GPT41QAModel
+from raptor import GPT41SummarizationModel,O3SummarizationModel
+from raptor import GPT41QAModel, O3QAModel
 from raptor.EmbeddingModels import CustomEmbeddingModel
 
 # RAPTOR yapılandırması
 embed_model = CustomEmbeddingModel()
-sum_model = GPT41SummarizationModel()
-qa_model = GPT41QAModel()
+sum_model = O3SummarizationModel()
+qa_model = O3QAModel()
 
 RA_config = RetrievalAugmentationConfig(
     tb_summarization_length=100, 

@@ -2,7 +2,7 @@
 from .cluster_tree_builder import ClusterTreeBuilder, ClusterTreeConfig
 from .EmbeddingModels import (BaseEmbeddingModel,CustomEmbeddingModel)
 from .FaissRetriever import FaissRetriever, FaissRetrieverConfig
-from .QAModels import (BaseQAModel,GPT41QAModel, GPT4OMINIQAModel, GPT4QAModel)
+from .QAModels import (BaseQAModel,GPT41QAModel, GPT4OMINIQAModel, GPT4QAModel,O3QAModel)
 from .RetrievalAugmentation import (RetrievalAugmentation,
                                     RetrievalAugmentationConfig)
 from .Retrievers import BaseRetriever
